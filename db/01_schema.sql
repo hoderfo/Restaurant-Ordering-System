@@ -23,9 +23,9 @@ CREATE TABLE reservations (
     duration INT NOT NULL DEFAULT 90, -- in minutes!
     notes TEXT,
     status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'seated', 'cancelled', 'no_show')),
-    created_at TIMESTAMPZ DEFAULT NOW(),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
     created_by INT REFERENCES users(user_id),
-    cancelled_at TIMESTAMPZ,
+    cancelled_at TIMESTAMPTZ,
     cancelled_by INT REFERENCES users(user_id)
 );
 
@@ -34,8 +34,8 @@ CREATE TABLE orders (
     table_id INT REFERENCES tables(table_id),
     reservation_id INT REFERENCES reservations(reservation_id),
     status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'completed', 'billed')),
-    created_at TIMESTAMPZ DEFAULT NOW(),
-    locked_at TIMESTAMPZ -- Set when billing starts
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    locked_at TIMESTAMPTZ -- Set when billing starts
 );
 
 CREATE TABLE menu_items (
@@ -55,7 +55,7 @@ CREATE TABLE order_items (
     unit_price DECIMAL(10,2) NOT NULL, -- snapshot(?) at time of order
     note VARCHAR(200),
     status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'in_preparation', 'ready', 'served')),
-    voided_at TIMESTAMPZ,
+    voided_at TIMESTAMPTZ,
     voided_by INT REFERENCES users(user_id)
 );
 
@@ -71,7 +71,7 @@ CREATE TABLE bills (
     discount_reason TEXT,
     total DECIMAL(10,2) NOT NULL,
     payment_method VARCHAR(20) CHECK (payment_method IN ('cash', 'card', 'ewallet')),
-    closed_at TIMESTAMPZ,
+    closed_at TIMESTAMPTZ,
     closed_by INT REFERENCES users(user_id)
 );
 
@@ -79,6 +79,6 @@ CREATE TABLE void_log ( -- Append-only, DO NOT DELETE!!!
     void_log_id SERIAL PRIMARY KEY,
     order_item_id INT REFERENCES order_items(order_item_id),
     reason TEXT NOT NULL,
-    voided_at TIMESTAMPZ DEFAULT NOW(),
+    voided_at TIMESTAMPTZ DEFAULT NOW(),
     voided_by INT REFERENCES users(user_id)
 );
