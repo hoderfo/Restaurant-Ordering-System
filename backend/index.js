@@ -51,6 +51,7 @@ app.set('trust proxy', 1);
 app.use(express.json());
 const allowedOrigins = [
     "http://localhost:5173",
+    "http://localhost:5174",
     "https://tastystation.vercel.app",
     "tastystation.vercel.app",
     "https://www.tastystation.vercel.app",

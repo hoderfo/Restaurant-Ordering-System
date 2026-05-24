@@ -6,6 +6,7 @@ const initSocket = (server) => {
     // Array of allowed origins matching the main server configuration
     const allowedOrigins = [
         "http://localhost:5173",
+        "http://localhost:5174",
         "https://tastystation.vercel.app",
         "tastystation.vercel.app",
         "https://www.tastystation.vercel.app",
