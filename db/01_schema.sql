@@ -82,3 +82,14 @@ CREATE TABLE void_log ( -- Append-only, DO NOT DELETE!!!
     voided_at TIMESTAMPTZ DEFAULT NOW(),
     voided_by INT REFERENCES users(user_id)
 );
+
+CREATE TABLE audit_log (
+	audit_log_id SERIAL PRIMARY KEY,
+	user_id INT REFERENCES users(user_id),
+	action VARCHAR(50) NOT NULL,
+	resource VARCHAR(100),
+	timestamp TIMESTAMPTZ DEFAULT NOW(),
+	ip_address VARCHAR(45),
+	success BOOLEAN NOT NULL,
+	details JSONB
+);
