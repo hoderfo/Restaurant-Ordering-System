@@ -1,12 +1,12 @@
 -- Test Users (password: "password123")
 -- Password hash generated with bcrypt
 INSERT INTO users (username, password_hash, role) VALUES
-('admin', '$2b$10$rZ5pY4qQqZ5pY4qQqZ5pYOYn5pY4qQqZ5pY4qQqZ5pY4qQqZ5pY4q', 'admin'),
-('manager1', '$2b$10$rZ5pY4qQqZ5pY4qQqZ5pYOYn5pY4qQqZ5pY4qQqZ5pY4qQqZ5pY4q', 'management'),
-('floor1', '$2b$10$rZ5pY4qQqZ5pY4qQqZ5pYOYn5pY4qQqZ5pY4qQqZ5pY4qQqZ5pY4q', 'floor'),
-('floor2', '$2b$10$rZ5pY4qQqZ5pY4qQqZ5pYOYn5pY4qQqZ5pY4qQqZ5pY4qQqZ5pY4q', 'floor'),
-('kitchen1', '$2b$10$rZ5pY4qQqZ5pY4qQqZ5pYOYn5pY4qQqZ5pY4qQqZ5pY4qQqZ5pY4q', 'kitchen'),
-('kitchen2', '$2b$10$rZ5pY4qQqZ5pY4qQqZ5pYOYn5pY4qQqZ5pY4qQqZ5pY4qQqZ5pY4q', 'kitchen');
+('admin', '$2b$10$70D8lYT2E05uaTRQ9r9BheK/9/t/ODfu7XYYfTs4aHb.PsxEgJvj6', 'admin'),
+('manager1', '$2b$10$70D8lYT2E05uaTRQ9r9BheK/9/t/ODfu7XYYfTs4aHb.PsxEgJvj6', 'management'),
+('floor1', '$2b$10$70D8lYT2E05uaTRQ9r9BheK/9/t/ODfu7XYYfTs4aHb.PsxEgJvj6', 'floor'),
+('floor2', '$2b$10$70D8lYT2E05uaTRQ9r9BheK/9/t/ODfu7XYYfTs4aHb.PsxEgJvj6', 'floor'),
+('kitchen1', '$2b$10$70D8lYT2E05uaTRQ9r9BheK/9/t/ODfu7XYYfTs4aHb.PsxEgJvj6', 'kitchen'),
+('kitchen2', '$2b$10$70D8lYT2E05uaTRQ9r9BheK/9/t/ODfu7XYYfTs4aHb.PsxEgJvj6', 'kitchen');
 
 -- Tables
 INSERT INTO tables (label, capacity, status) VALUES

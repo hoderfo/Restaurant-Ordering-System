@@ -76,7 +76,7 @@ router.post('/login', async (req, res) => {
  * POST /api/auth/logout
  * Log the logout event (token invalidation handled client-side)
  */
-router.post('/logout', authenticatetoken, async (req, res) => {
+router.post('/logout', authenticateToken, async (req, res) => {
 	try {
 		await logAudit(req.user.user_id, 'logout', 'auth', true, req.ip, { username: req.user.username });
 		res.json({

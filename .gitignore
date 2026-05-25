@@ -1,0 +1,11 @@
+node_modules/
+.env
+.env.local
+.DS_Store
+dist/
+build/
+fix_data.js
+test_controller.js
+404_errors.log
+coverage/
+.npm/
