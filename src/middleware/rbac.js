@@ -8,7 +8,7 @@ function requireRole(allowedRoles) {
 				error: 'Authentication required.'
 			});
 		}
-		if (!allowedroles.includes(userRole)) {
+		if (!allowedRoles.includes(userRole)) {
 			// Log unauthorized access attempt
 			logAudit(req.user.user_id, 'access_denied', req.path, false, req.ip, { required_roles: allowedRoles, user_role: userRole, method: req.method });
 			return res.status(403).json({
