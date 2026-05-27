@@ -60,13 +60,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ username, password })
             });
             const data = await response.json();
-            
+
             if (response.ok) {
                 token = data.token;
                 user = data.user;
                 localStorage.setItem('ros_token', token);
                 localStorage.setItem('ros_user', JSON.stringify(user));
-                
+
                 loginModal.classList.add('hidden');
                 loginForm.reset();
                 updateAuthUI();
@@ -108,14 +108,14 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetch('/api/table', {
                 method: 'POST',
-                headers: { 
+                headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}` 
+                    'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify({ label, capacity, status: 'available' })
             });
             const data = await response.json();
-            
+
             if (response.ok) {
                 showToast('Table added successfully!', 'success');
                 addTableModal.classList.add('hidden');
@@ -163,7 +163,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderTables() {
         floorMap.innerHTML = '';
-        
+
         if (currentTables.length === 0) {
             floorMap.innerHTML = '<p style="grid-column: 1/-1; text-align: center;">No tables found.</p>';
             return;
@@ -176,7 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Date logic depends on how it's returned. In JS it might be a full ISO string.
             // Let's just map all pending/seated for simplicity, since API returns mostly active ones
             if (r.status === 'Pending' || r.status === 'Seated') {
-                activeResMap[r.table._id || r.table_id] = r; 
+                activeResMap[r.table._id || r.table_id] = r;
             }
         });
 
@@ -184,18 +184,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const tableEl = document.createElement('div');
             let statusClass = table.status ? table.status.toLowerCase() : 'available';
             const activeRes = activeResMap[table._id];
-            
+
             // Override UI color if the table is physically available but has an upcoming reservation
             if (statusClass === 'available' && activeRes && activeRes.status === 'Pending') {
                 statusClass = 'reserved';
             }
-            
+
             tableEl.className = `table-item ${statusClass}`;
             tableEl.innerHTML = `
                 <span class="table-name">T${table.label || table._id}</span>
                 <span class="table-capacity">${table.capacity} pax</span>
             `;
-            
+
             tableEl.addEventListener('click', () => openTableContext(table, activeRes));
             floorMap.appendChild(tableEl);
         });
@@ -206,10 +206,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function openTableContext(table, activeRes) {
         selectedTableForContext = { table, activeRes };
-        
+
         document.getElementById('context-table-name').textContent = `Table ${table.label || table._id}`;
         document.getElementById('context-table-status').textContent = table.status;
-        
+
         const resInfo = document.getElementById('context-reservation-info');
         const actionBox = document.getElementById('context-actions');
         actionBox.innerHTML = ''; // clear buttons
@@ -218,7 +218,7 @@ document.addEventListener('DOMContentLoaded', () => {
             resInfo.classList.remove('hidden');
             document.getElementById('context-res-name').textContent = activeRes.bookedBy;
             document.getElementById('context-res-pax').textContent = activeRes.guests;
-            
+
             // Format time nicely
             const d = new Date(activeRes.startTime);
             document.getElementById('context-res-time').textContent = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -240,6 +240,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 actionBox.innerHTML += `<button class="btn-primary" onclick="openOrderModal('${table._id || table.table_id}', '${table.label}')">Manage Orders</button>`;
                 actionBox.innerHTML += `<button class="btn-secondary" onclick="markCleaning('${table._id || table.table_id}')">End Meal (Requires Cleaning)</button>`;
             }
+        }
+
+        // Add Delete button for admins/managers
+        if (user && (user.role === 'admin' || user.role === 'management')) {
+            actionBox.innerHTML += `<button class="btn-secondary" style="margin-top: 10px; background-color: #dc3545; color: white; border: none;" onclick="deleteTable('${table._id}')">Delete Table</button>`;
         }
 
         // Add Manage Orders button if seated via reservation
@@ -273,13 +278,13 @@ document.addEventListener('DOMContentLoaded', () => {
     window.walkInGuest = async (tableId) => {
         const guests = prompt("How many guests for this walk-in?", "2");
         if (!guests) return;
-        
+
         try {
             // Wait, we need a walk-in API or just update table to occupied.
             // Let's assume a walk-in updates the table status to 'occupied'.
             const response = await fetch(`/api/table/${tableId}`, {
                 method: 'PUT',
-                headers: { 
+                headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
@@ -298,11 +303,31 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    window.deleteTable = async (tableId) => {
+        if (!confirm("Are you sure you want to delete this table?")) return;
+        try {
+            const response = await fetch(`/api/table/${tableId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                showToast('Table deleted successfully', 'success');
+                tableContextModal.classList.add('hidden');
+                loadFloorPlan();
+            } else {
+                const data = await response.json();
+                showToast(data.message || 'Failed to delete table', 'error');
+            }
+        } catch (error) {
+            showToast('Network error', 'error');
+        }
+    };
+
     window.markCleaning = async (tableId) => {
         try {
             const response = await fetch(`/api/table/${tableId}`, {
                 method: 'PUT',
-                headers: { 
+                headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
@@ -324,7 +349,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetch(`/api/table/${tableId}`, {
                 method: 'PUT',
-                headers: { 
+                headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
@@ -335,7 +360,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 tableContextModal.classList.add('hidden');
                 loadFloorPlan();
             }
-        } catch (error) {}
+        } catch (error) { }
     };
 
     // --- Reservation Form Submission ---
@@ -396,7 +421,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.openOrderModal = async (tableId, tableLabel) => {
         tableContextModal.classList.add('hidden');
         document.getElementById('order-table-name').textContent = `Order for Table ${tableLabel}`;
-        
+
         // Ensure we have an active order for the table
         try {
             const res = await fetch('/api/orders', {
@@ -508,7 +533,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 },
                 body: JSON.stringify({ menuItemId, quantity: 1, note })
             });
-            
+
             const data = await res.json();
             if (data.success) {
                 showToast('Item added to order', 'success');
@@ -528,7 +553,7 @@ document.addEventListener('DOMContentLoaded', () => {
         toast.className = `toast ${type}`;
         toast.textContent = message;
         toastContainer.appendChild(toast);
-        
+
         setTimeout(() => {
             toast.style.opacity = '0';
             setTimeout(() => {
