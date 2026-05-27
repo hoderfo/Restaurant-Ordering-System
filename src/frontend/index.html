@@ -1,13 +1,129 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tasty Station POS</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Restaurant Ordering System</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header class="app-header">
+        <h1>Tasty Station</h1>
+        <div class="user-actions">
+            <span id="user-info">Welcome, Guest</span>
+            <button id="auth-btn" class="btn-text">Login</button>
+        </div>
+    </header>
+
+    <main class="main-container">
+        <!-- Floor Plan Section -->
+        <section class="floor-plan-section">
+            <div class="section-header">
+                <h2>Floor Plan</h2>
+                <button id="show-add-table-btn" class="btn-secondary" style="display: none;">+ Add Table</button>
+            </div>
+            <div class="legend">
+                <span class="legend-item"><span class="color-box status-available"></span> Available</span>
+                <span class="legend-item"><span class="color-box status-reserved"></span> Reserved</span>
+                <span class="legend-item"><span class="color-box status-occupied"></span> Occupied</span>
+                <span class="legend-item"><span class="color-box status-cleaning"></span> Cleaning</span>
+            </div>
+            <div class="floor-map" id="floor-map">
+                <!-- Tables will be rendered here dynamically -->
+            </div>
+        </section>
+
+        <!-- Reservation Form Section -->
+        <section class="reservation-section">
+            <h2>Make a Reservation</h2>
+            <form id="reservation-form" class="md-form">
+                <div class="form-group">
+                    <label for="customerName">Customer Name</label>
+                    <input type="text" id="customerName" name="customerName" required>
+                </div>
+                <div class="form-group">
+                    <label for="customerPhone">Phone Number</label>
+                    <input type="tel" id="customerPhone" name="customerPhone" required>
+                </div>
+                <div class="form-group">
+                    <label for="partySize">Party Size</label>
+                    <input type="number" id="partySize" name="partySize" min="1" required>
+                </div>
+                <div class="form-group">
+                    <label for="reservationTime">Reservation Time</label>
+                    <input type="datetime-local" id="reservationTime" name="reservationTime" required>
+                </div>
+                <button type="submit" class="btn-primary" id="submit-reservation">Book Table</button>
+            </form>
+            <div id="toast-container" class="toast-container"></div>
+        </section>
+    </main>
+
+    <!-- Modals -->
+    <!-- Login Modal -->
+    <div id="login-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Staff Login</h2>
+                <span class="close-btn" id="close-login">&times;</span>
+            </div>
+            <form id="login-form" class="md-form">
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" required>
+                </div>
+                <button type="submit" class="btn-primary">Login</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add Table Modal -->
+    <div id="add-table-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add New Table</h2>
+                <span class="close-btn" id="close-add-table">&times;</span>
+            </div>
+            <form id="add-table-form" class="md-form">
+                <div class="form-group">
+                    <label for="tableLabel">Table Label (e.g. 10 or VIP1)</label>
+                    <input type="text" id="tableLabel" required>
+                </div>
+                <div class="form-group">
+                    <label for="tableCapacity">Capacity (Pax)</label>
+                    <input type="number" id="tableCapacity" min="1" required>
+                </div>
+                <button type="submit" class="btn-primary">Create Table</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Table Context Modal -->
+    <div id="table-context-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="context-table-name">Table Details</h2>
+                <span class="close-btn" id="close-context">&times;</span>
+            </div>
+            <div class="context-details">
+                <p>Status: <strong id="context-table-status"></strong></p>
+                <div id="context-reservation-info" class="hidden">
+                    <p>Reserved By: <strong id="context-res-name"></strong></p>
+                    <p>Party Size: <strong id="context-res-pax"></strong></p>
+                    <p>Time: <strong id="context-res-time"></strong></p>
+                </div>
+            </div>
+            <div class="context-actions" id="context-actions">
+                <!-- Buttons injected dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
 </html>

@@ -1,0 +1,394 @@
+document.addEventListener('DOMContentLoaded', () => {
+    // DOM Elements
+    const floorMap = document.getElementById('floor-map');
+    const reservationForm = document.getElementById('reservation-form');
+    const toastContainer = document.getElementById('toast-container');
+    const submitBtn = document.getElementById('submit-reservation');
+    const authBtn = document.getElementById('auth-btn');
+    const userInfo = document.getElementById('user-info');
+    const showAddTableBtn = document.getElementById('show-add-table-btn');
+
+    // Modals
+    const loginModal = document.getElementById('login-modal');
+    const addTableModal = document.getElementById('add-table-modal');
+    const tableContextModal = document.getElementById('table-context-modal');
+    const loginForm = document.getElementById('login-form');
+    const addTableForm = document.getElementById('add-table-form');
+
+    // State
+    let token = localStorage.getItem('ros_token') || null;
+    let user = JSON.parse(localStorage.getItem('ros_user')) || null;
+    let currentTables = [];
+    let currentReservations = [];
+    let selectedTableForContext = null;
+
+    // Initialization
+    updateAuthUI();
+    loadFloorPlan();
+
+    // --- Authentication Logic ---
+    authBtn.addEventListener('click', () => {
+        if (token) {
+            // Logout
+            token = null;
+            user = null;
+            localStorage.removeItem('ros_token');
+            localStorage.removeItem('ros_user');
+            updateAuthUI();
+            showToast('Logged out successfully', 'success');
+            loadFloorPlan(); // Refresh map without auth
+        } else {
+            // Show Login Modal
+            loginModal.classList.remove('hidden');
+        }
+    });
+
+    document.getElementById('close-login').addEventListener('click', () => loginModal.classList.add('hidden'));
+
+    loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+
+        try {
+            const response = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            const data = await response.json();
+            
+            if (response.ok) {
+                token = data.token;
+                user = data.user;
+                localStorage.setItem('ros_token', token);
+                localStorage.setItem('ros_user', JSON.stringify(user));
+                
+                loginModal.classList.add('hidden');
+                loginForm.reset();
+                updateAuthUI();
+                showToast('Logged in successfully!', 'success');
+                loadFloorPlan();
+            } else {
+                showToast(data.error || 'Login failed', 'error');
+            }
+        } catch (error) {
+            showToast('Network error during login', 'error');
+        }
+    });
+
+    function updateAuthUI() {
+        if (token && user) {
+            userInfo.textContent = `Logged in as: ${user.username} (${user.role})`;
+            authBtn.textContent = 'Logout';
+            if (user.role === 'admin' || user.role === 'management') {
+                showAddTableBtn.style.display = 'inline-block';
+            } else {
+                showAddTableBtn.style.display = 'none';
+            }
+        } else {
+            userInfo.textContent = 'Welcome, Guest';
+            authBtn.textContent = 'Login';
+            showAddTableBtn.style.display = 'none';
+        }
+    }
+
+    // --- Table Management Logic ---
+    showAddTableBtn.addEventListener('click', () => addTableModal.classList.remove('hidden'));
+    document.getElementById('close-add-table').addEventListener('click', () => addTableModal.classList.add('hidden'));
+
+    addTableForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const label = document.getElementById('tableLabel').value;
+        const capacity = document.getElementById('tableCapacity').value;
+
+        try {
+            const response = await fetch('/api/table', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}` 
+                },
+                body: JSON.stringify({ label, capacity, status: 'available' })
+            });
+            const data = await response.json();
+            
+            if (response.ok) {
+                showToast('Table added successfully!', 'success');
+                addTableModal.classList.add('hidden');
+                addTableForm.reset();
+                loadFloorPlan();
+            } else {
+                showToast(data.message || data.error || 'Failed to add table', 'error');
+            }
+        } catch (error) {
+            showToast('Network error', 'error');
+        }
+    });
+
+    // --- Floor Plan Logic ---
+    async function loadFloorPlan() {
+        if (!token) {
+            floorMap.innerHTML = '<p style="grid-column: 1/-1; text-align: center;">Please log in to view the floor plan.</p>';
+            return;
+        }
+
+        try {
+            // Fetch tables
+            const tableRes = await fetch('/api/table', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!tableRes.ok) throw new Error('Failed to fetch tables');
+            const tableData = await tableRes.json();
+            currentTables = Array.isArray(tableData.tables) ? tableData.tables : [];
+
+            // Fetch reservations to map to tables
+            const resRes = await fetch('/api/reservations', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (resRes.ok) {
+                const resData = await resRes.json();
+                currentReservations = Array.isArray(resData.reservations) ? resData.reservations : [];
+            }
+
+            renderTables();
+        } catch (error) {
+            console.error(error);
+            showToast('Failed to load floor plan. Check login status.', 'error');
+        }
+    }
+
+    function renderTables() {
+        floorMap.innerHTML = '';
+        
+        if (currentTables.length === 0) {
+            floorMap.innerHTML = '<p style="grid-column: 1/-1; text-align: center;">No tables found.</p>';
+            return;
+        }
+
+        // Only look at pending or seated reservations for today
+        const todayStr = new Date().toISOString().split('T')[0];
+        const activeResMap = {};
+        currentReservations.forEach(r => {
+            // Date logic depends on how it's returned. In JS it might be a full ISO string.
+            // Let's just map all pending/seated for simplicity, since API returns mostly active ones
+            if (r.status === 'Pending' || r.status === 'Seated') {
+                activeResMap[r.table._id || r.table_id] = r; 
+            }
+        });
+
+        currentTables.forEach(table => {
+            const tableEl = document.createElement('div');
+            let statusClass = table.status ? table.status.toLowerCase() : 'available';
+            const activeRes = activeResMap[table._id];
+            
+            // Override UI color if the table is physically available but has an upcoming reservation
+            if (statusClass === 'available' && activeRes && activeRes.status === 'Pending') {
+                statusClass = 'reserved';
+            }
+            
+            tableEl.className = `table-item ${statusClass}`;
+            tableEl.innerHTML = `
+                <span class="table-name">T${table.label || table._id}</span>
+                <span class="table-capacity">${table.capacity} pax</span>
+            `;
+            
+            tableEl.addEventListener('click', () => openTableContext(table, activeRes));
+            floorMap.appendChild(tableEl);
+        });
+    }
+
+    // --- Table Context Modal Logic ---
+    document.getElementById('close-context').addEventListener('click', () => tableContextModal.classList.add('hidden'));
+
+    function openTableContext(table, activeRes) {
+        selectedTableForContext = { table, activeRes };
+        
+        document.getElementById('context-table-name').textContent = `Table ${table.label || table._id}`;
+        document.getElementById('context-table-status').textContent = table.status;
+        
+        const resInfo = document.getElementById('context-reservation-info');
+        const actionBox = document.getElementById('context-actions');
+        actionBox.innerHTML = ''; // clear buttons
+
+        if (activeRes) {
+            resInfo.classList.remove('hidden');
+            document.getElementById('context-res-name').textContent = activeRes.bookedBy;
+            document.getElementById('context-res-pax').textContent = activeRes.guests;
+            
+            // Format time nicely
+            const d = new Date(activeRes.startTime);
+            document.getElementById('context-res-time').textContent = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            if (activeRes.status === 'Pending') {
+                actionBox.innerHTML += `<button class="btn-primary" onclick="manageReservation('${activeRes._id}', 'checkin')">Check In Guest</button>`;
+                actionBox.innerHTML += `<button class="btn-secondary" onclick="manageReservation('${activeRes._id}', 'cancel')">Cancel Reservation</button>`;
+                actionBox.innerHTML += `<button class="btn-secondary" onclick="manageReservation('${activeRes._id}', 'noshow')">Mark No-Show</button>`;
+            } else if (activeRes.status === 'Seated') {
+                actionBox.innerHTML += `<button class="btn-secondary" onclick="markCleaning('${table._id}')">End Meal (Requires Cleaning)</button>`;
+            }
+        } else {
+            resInfo.classList.add('hidden');
+            if (table.status.toLowerCase() === 'available') {
+                actionBox.innerHTML += `<button class="btn-primary" onclick="walkInGuest('${table._id}')">Seat Walk-In Guest</button>`;
+            } else if (table.status.toLowerCase() === 'cleaning') {
+                actionBox.innerHTML += `<button class="btn-primary" onclick="freeTable('${table._id}')">Mark Cleaned (Available)</button>`;
+            }
+        }
+
+        tableContextModal.classList.remove('hidden');
+    }
+
+    // Attach to window so onclick handlers in HTML string work
+    window.manageReservation = async (resId, action) => {
+        try {
+            const response = await fetch(`/api/reservations/${resId}/${action}`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                showToast(`Action successful`, 'success');
+                tableContextModal.classList.add('hidden');
+                loadFloorPlan();
+            } else {
+                const data = await response.json();
+                showToast(data.message || 'Failed to update reservation', 'error');
+            }
+        } catch (error) {
+            showToast('Network error', 'error');
+        }
+    };
+
+    window.walkInGuest = async (tableId) => {
+        const guests = prompt("How many guests for this walk-in?", "2");
+        if (!guests) return;
+        
+        try {
+            const response = await fetch('/api/reservations/walkin', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ tableId, guests: parseInt(guests) })
+            });
+            if (response.ok) {
+                showToast('Walk-in seated!', 'success');
+                tableContextModal.classList.add('hidden');
+                loadFloorPlan();
+            } else {
+                const data = await response.json();
+                showToast(data.message || 'Failed to seat walk-in', 'error');
+            }
+        } catch (error) {
+            showToast('Network error', 'error');
+        }
+    };
+
+    window.markCleaning = async (tableId) => {
+        try {
+            const response = await fetch(`/api/table/${tableId}`, {
+                method: 'PUT',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ status: 'cleaning' })
+            });
+            if (response.ok) {
+                showToast('Meal ended. Table needs cleaning!', 'success');
+                tableContextModal.classList.add('hidden');
+                loadFloorPlan();
+            } else {
+                showToast('Failed to update table', 'error');
+            }
+        } catch (error) {
+            showToast('Network error', 'error');
+        }
+    };
+
+    window.freeTable = async (tableId) => {
+        try {
+            const response = await fetch(`/api/table/${tableId}`, {
+                method: 'PUT',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ status: 'available' })
+            });
+            if (response.ok) {
+                showToast('Table is now available', 'success');
+                tableContextModal.classList.add('hidden');
+                loadFloorPlan();
+            }
+        } catch (error) {}
+    };
+
+    // --- Reservation Form Submission ---
+    reservationForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!token) {
+            showToast('You must be logged in to create a reservation', 'error');
+            return;
+        }
+
+        const customerName = document.getElementById('customerName').value;
+        const customerPhone = document.getElementById('customerPhone').value;
+        const partySize = parseInt(document.getElementById('partySize').value);
+        const reservationTime = document.getElementById('reservationTime').value;
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Booking...';
+
+        try {
+            const response = await fetch('/api/reservations', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    bookedBy: customerName,
+                    contact: customerPhone,
+                    guests: partySize,
+                    date: reservationTime // Controller extracts time from this
+                })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                showToast(`Table ${data.table.label} booked successfully!`, 'success');
+                reservationForm.reset();
+                loadFloorPlan();
+            } else if (response.status === 409 && data.requiresOverride) {
+                if (confirm(data.message)) {
+                    alert("Override functionality requires additional UI. Try booking a different time.");
+                }
+            } else {
+                showToast(data.message || data.error || 'Failed to create reservation', 'error');
+            }
+        } catch (error) {
+            showToast('An error occurred while booking.', 'error');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Book Table';
+        }
+    });
+
+    // --- Utility ---
+    function showToast(message, type = 'success') {
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.textContent = message;
+        toastContainer.appendChild(toast);
+        
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            setTimeout(() => {
+                if (toastContainer.contains(toast)) toastContainer.removeChild(toast);
+            }, 300);
+        }, 3000);
+    }
+});
