@@ -5,6 +5,8 @@ require('dotenv').config();
 const authRoutes = require('./routes/auth');
 const tableRoutes = require('./routes/table.router');
 const reservationRoutes = require('./routes/reservation.router');
+const menuRoutes = require('./routes/menu.router');
+const orderRoutes = require('./routes/order.router');
 const pool = require('./config/db');
 
 const app = express();
@@ -22,6 +24,8 @@ app.set('trust proxy', true);
 app.use('/api/auth', authRoutes);
 app.use('/api/table', tableRoutes);
 app.use('/api/reservations', reservationRoutes);
+app.use('/api/menu', menuRoutes);
+app.use('/api/orders', orderRoutes);
 
 // Serve static frontend files
 app.use(express.static(path.join(__dirname, 'frontend')));

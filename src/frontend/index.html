@@ -124,6 +124,30 @@
         </div>
     </div>
 
+    <!-- Order Modal -->
+    <div id="order-modal" class="modal hidden">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2 id="order-table-name">Order for Table</h2>
+                <span class="close-btn" id="close-order">&times;</span>
+            </div>
+            <div class="order-container">
+                <div class="menu-section">
+                    <h3>Menu</h3>
+                    <div id="menu-grid" class="menu-grid">
+                        <!-- Menu items injected dynamically -->
+                    </div>
+                </div>
+                <div class="current-order-section">
+                    <h3>Current Order</h3>
+                    <div id="current-order-list" class="order-list">
+                        <!-- Current items injected dynamically -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="app.js"></script>
 </body>
 </html>

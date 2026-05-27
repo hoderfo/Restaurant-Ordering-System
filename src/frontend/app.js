@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const loginModal = document.getElementById('login-modal');
     const addTableModal = document.getElementById('add-table-modal');
     const tableContextModal = document.getElementById('table-context-modal');
+    const orderModal = document.getElementById('order-modal');
     const loginForm = document.getElementById('login-form');
     const addTableForm = document.getElementById('add-table-form');
 
@@ -21,6 +22,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentTables = [];
     let currentReservations = [];
     let selectedTableForContext = null;
+    let menuItems = [];
+    let activeOrder = null;
 
     // Initialization
     updateAuthUI();
@@ -230,10 +233,18 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             resInfo.classList.add('hidden');
             if (table.status.toLowerCase() === 'available') {
-                actionBox.innerHTML += `<button class="btn-primary" onclick="walkInGuest('${table._id}')">Seat Walk-In Guest</button>`;
+                actionBox.innerHTML += `<button class="btn-primary" onclick="walkInGuest('${table._id || table.table_id}')">Seat Walk-In Guest</button>`;
             } else if (table.status.toLowerCase() === 'cleaning') {
-                actionBox.innerHTML += `<button class="btn-primary" onclick="freeTable('${table._id}')">Mark Cleaned (Available)</button>`;
+                actionBox.innerHTML += `<button class="btn-primary" onclick="freeTable('${table._id || table.table_id}')">Mark Cleaned (Available)</button>`;
+            } else if (table.status.toLowerCase() === 'occupied') {
+                actionBox.innerHTML += `<button class="btn-primary" onclick="openOrderModal('${table._id || table.table_id}', '${table.label}')">Manage Orders</button>`;
+                actionBox.innerHTML += `<button class="btn-secondary" onclick="markCleaning('${table._id || table.table_id}')">End Meal (Requires Cleaning)</button>`;
             }
+        }
+
+        // Add Manage Orders button if seated via reservation
+        if (activeRes && activeRes.status === 'Seated') {
+            actionBox.innerHTML += `<button class="btn-primary" onclick="openOrderModal('${table._id || table.table_id}', '${table.label}')">Manage Orders</button>`;
         }
 
         tableContextModal.classList.remove('hidden');
@@ -264,13 +275,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!guests) return;
         
         try {
-            const response = await fetch('/api/reservations/walkin', {
-                method: 'POST',
+            // Wait, we need a walk-in API or just update table to occupied.
+            // Let's assume a walk-in updates the table status to 'occupied'.
+            const response = await fetch(`/api/table/${tableId}`, {
+                method: 'PUT',
                 headers: { 
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify({ tableId, guests: parseInt(guests) })
+                body: JSON.stringify({ status: 'occupied' })
             });
             if (response.ok) {
                 showToast('Walk-in seated!', 'success');
@@ -376,6 +389,138 @@ document.addEventListener('DOMContentLoaded', () => {
             submitBtn.textContent = 'Book Table';
         }
     });
+
+    // --- Order Management Logic ---
+    document.getElementById('close-order').addEventListener('click', () => orderModal.classList.add('hidden'));
+
+    window.openOrderModal = async (tableId, tableLabel) => {
+        tableContextModal.classList.add('hidden');
+        document.getElementById('order-table-name').textContent = `Order for Table ${tableLabel}`;
+        
+        // Ensure we have an active order for the table
+        try {
+            const res = await fetch('/api/orders', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ tableId })
+            });
+            const data = await res.json();
+            if (data.success) {
+                activeOrder = data.order;
+            } else {
+                showToast('Failed to initialize order', 'error');
+                return;
+            }
+        } catch (e) {
+            showToast('Network error initializing order', 'error');
+            return;
+        }
+
+        await fetchMenu();
+        await fetchTableOrder(tableId);
+        orderModal.classList.remove('hidden');
+    };
+
+    async function fetchMenu() {
+        if (menuItems.length > 0) {
+            renderMenu();
+            return;
+        }
+        try {
+            const res = await fetch('/api/menu', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (data.success) {
+                menuItems = data.menuItems;
+                renderMenu();
+            }
+        } catch (e) {
+            console.error('Error fetching menu', e);
+        }
+    }
+
+    function renderMenu() {
+        const grid = document.getElementById('menu-grid');
+        grid.innerHTML = '';
+        menuItems.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'menu-card';
+            div.innerHTML = `
+                <h4>${item.name}</h4>
+                <p>$${parseFloat(item.price).toFixed(2)}</p>
+                <button class="btn-primary btn-small" onclick="addToOrder(${item.menu_item_id})">Add</button>
+            `;
+            grid.appendChild(div);
+        });
+    }
+
+    async function fetchTableOrder(tableId) {
+        try {
+            const res = await fetch(`/api/orders/table/${tableId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (data.success) {
+                renderCurrentOrder(data.orderItems);
+            }
+        } catch (e) {
+            console.error('Error fetching table order', e);
+        }
+    }
+
+    function renderCurrentOrder(items) {
+        const list = document.getElementById('current-order-list');
+        list.innerHTML = '';
+        if (!items || items.length === 0) {
+            list.innerHTML = '<p>No items ordered yet.</p>';
+            return;
+        }
+
+        items.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'order-item-row';
+            div.innerHTML = `
+                <div class="oi-info">
+                    <strong>${item.quantity}x ${item.name}</strong>
+                    <span class="status-badge ${item.status}">${item.status.replace('_', ' ')}</span>
+                </div>
+                ${item.note ? `<small class="oi-note">Note: ${item.note}</small>` : ''}
+            `;
+            list.appendChild(div);
+        });
+    }
+
+    window.addToOrder = async (menuItemId) => {
+        if (!activeOrder) return;
+        const note = prompt("Any special requests?", "");
+        if (note === null) return; // user cancelled
+
+        try {
+            const res = await fetch(`/api/orders/${activeOrder.order_id || activeOrder.orderId}/items`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ menuItemId, quantity: 1, note })
+            });
+            
+            const data = await res.json();
+            if (data.success) {
+                showToast('Item added to order', 'success');
+                // refresh current order list
+                fetchTableOrder(activeOrder.table_id || activeOrder.tableId);
+            } else {
+                showToast(data.message || 'Failed to add item', 'error');
+            }
+        } catch (e) {
+            showToast('Network error adding item', 'error');
+        }
+    };
 
     // --- Utility ---
     function showToast(message, type = 'success') {
