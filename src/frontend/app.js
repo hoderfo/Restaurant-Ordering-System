@@ -235,6 +235,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 actionBox.innerHTML += `<button class="btn-primary" onclick="freeTable('${table._id}')">Mark Cleaned (Available)</button>`;
             }
         }
+        
+        // Add Delete button for admins/managers
+        if (user && (user.role === 'admin' || user.role === 'management')) {
+            actionBox.innerHTML += `<button class="btn-secondary" style="margin-top: 10px; background-color: #dc3545; color: white; border: none;" onclick="deleteTable('${table._id}')">Delete Table</button>`;
+        }
 
         tableContextModal.classList.remove('hidden');
     }
@@ -279,6 +284,26 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 const data = await response.json();
                 showToast(data.message || 'Failed to seat walk-in', 'error');
+            }
+        } catch (error) {
+            showToast('Network error', 'error');
+        }
+    };
+
+    window.deleteTable = async (tableId) => {
+        if (!confirm("Are you sure you want to delete this table?")) return;
+        try {
+            const response = await fetch(`/api/table/${tableId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                showToast('Table deleted successfully', 'success');
+                tableContextModal.classList.add('hidden');
+                loadFloorPlan();
+            } else {
+                const data = await response.json();
+                showToast(data.message || 'Failed to delete table', 'error');
             }
         } catch (error) {
             showToast('Network error', 'error');
