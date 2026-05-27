@@ -1,5 +1,4 @@
 const pool = require("../config/db");
-const crypto = require("crypto");
 
 const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : s;
 

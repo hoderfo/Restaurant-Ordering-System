@@ -1,40 +1,17 @@
 const express = require('express');
+const path = require('path');
 const cors = require('cors');
 require('dotenv').config();
-const http = require('http');
-
 const authRoutes = require('./routes/auth');
 const tableRoutes = require('./routes/table.router');
 const reservationRoutes = require('./routes/reservation.router');
 const pool = require('./config/db');
-const { initSocket } = require('./config/socket.config');
 
 const app = express();
-const server = http.createServer(app);
-initSocket(server);
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-const allowedOrigins = [
-	"http://localhost:5173",
-	"http://localhost:5174",
-	"https://tastystation.vercel.app",
-	"tastystation.vercel.app",
-	"https://www.tastystation.vercel.app",
-	"www.tastystation.vercel.app"
-];
-app.use(cors({
-	origin: function (origin, callback) {
-		if (!origin) return callback(null, true);
-		if (allowedOrigins.indexOf(origin) === -1) {
-			var msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-			return callback(new Error(msg), false);
-		}
-		return callback(null, true);
-	},
-	methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-	credentials: true
-}));
+app.use(cors()); // Simple CORS since frontend is now served by this backend
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
  
@@ -45,6 +22,9 @@ app.set('trust proxy', true);
 app.use('/api/auth', authRoutes);
 app.use('/api/table', tableRoutes);
 app.use('/api/reservations', reservationRoutes);
+
+// Serve static frontend files
+app.use(express.static(path.join(__dirname, 'frontend')));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -86,9 +66,7 @@ app.use((error, req, res, next) => {
 });
 
 // Start server
-server.listen(PORT, () => {
+app.listen(PORT, () => {
 	console.log(`Server running on http://localhost:${PORT}`);
 	console.log(`Environment: ${process.env.NODE_ENV}`);
 });
-
-module.exports = { app, server };
