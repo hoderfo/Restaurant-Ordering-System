@@ -38,17 +38,17 @@ const updateTable = async (req, res) => {
     try {
         const { id } = req.params;
         const { label, capacity, status } = req.body;
-        
+
         let query = 'UPDATE tables SET ';
         const values = [];
         let index = 1;
-        
+
         if (label) { query += `label = $${index}, `; values.push(label); index++; }
         if (capacity) { query += `capacity = $${index}, `; values.push(capacity); index++; }
-        if (status) { 
+        if (status) {
             const newStatus = status.toLowerCase();
-            query += `status = $${index}, `; values.push(newStatus); index++; 
-            
+            query += `status = $${index}, `; values.push(newStatus); index++;
+
             if (newStatus === 'cleaning' || newStatus === 'available') {
                 const activeRes = await pool.query(
                     "SELECT * FROM reservations WHERE table_id = $1 AND status = 'seated'",
@@ -60,19 +60,21 @@ const updateTable = async (req, res) => {
                     const start = new Date(`${dbDateStr}T${r.start_time}`);
                     let elapsedMins = Math.floor((Date.now() - start.getTime()) / 60000);
                     if (elapsedMins < 1) elapsedMins = 1;
-                    
+
                     await pool.query(
-                        "UPDATE reservations SET duration = $1, status = 'completed' WHERE reservation_id = $2",
+                        "UPDATE reservations SET duration = $1 WHERE reservation_id = $2",
                         [elapsedMins, r.reservation_id]
                     );
                 }
             }
         }
-        
+
+
+
         query = query.slice(0, -2); // remove last comma
         query += ` WHERE table_id = $${index} RETURNING *`;
         values.push(id);
-        
+
         const result = await pool.query(query, values);
         if (result.rows.length === 0) return res.status(404).json({ success: false, message: "Table not found" });
 
@@ -91,7 +93,7 @@ const deleteTable = async (req, res) => {
         // Unlink from history to prevent foreign key constraint violations
         await pool.query('UPDATE reservations SET table_id = NULL WHERE table_id = $1', [id]);
         await pool.query('UPDATE orders SET table_id = NULL WHERE table_id = $1', [id]);
-        
+
         const result = await pool.query('DELETE FROM tables WHERE table_id = $1 RETURNING *', [id]);
         if (result.rows.length === 0) return res.status(404).json({ success: false, message: "Table not found" });
         res.status(200).json({ success: true, message: "Table deleted" });

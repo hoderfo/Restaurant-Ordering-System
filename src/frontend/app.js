@@ -228,7 +228,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 actionBox.innerHTML += `<button class="btn-secondary" onclick="manageReservation('${activeRes._id}', 'cancel')">Cancel Reservation</button>`;
                 actionBox.innerHTML += `<button class="btn-secondary" onclick="manageReservation('${activeRes._id}', 'noshow')">Mark No-Show</button>`;
             } else if (activeRes.status === 'Seated') {
-                actionBox.innerHTML += `<button class="btn-secondary" onclick="markCleaning('${table._id}')">End Meal (Requires Cleaning)</button>`;
+                if (table.status.toLowerCase() === 'cleaning') {
+                    actionBox.innerHTML += `<button class="btn-primary" onclick="freeTable('${table._id || table.table_id}')">Mark Cleaned (Available)</button>`;
+                } else {
+                    actionBox.innerHTML += `<button class="btn-secondary" onclick="markCleaning('${table._id}')">End Meal (Requires Cleaning)</button>`;
+                }
             }
         } else {
             resInfo.classList.add('hidden');
