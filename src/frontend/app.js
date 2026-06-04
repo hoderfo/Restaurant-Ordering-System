@@ -32,7 +32,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Authentication Logic ---
     authBtn.addEventListener('click', () => {
         if (token) {
-            // Logout
+            // Call Backend to trigger Audit Log
+            fetch('/api/auth/logout', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            }).catch(e => console.error(e));
+
+            // Logout Locally
             token = null;
             user = null;
             localStorage.removeItem('ros_token');
