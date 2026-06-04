@@ -16,10 +16,10 @@ const PORT = process.env.PORT || 3000;
 app.use(cors()); // Simple CORS since frontend is now served by this backend
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
- 
+
 // Trust proxy for accurate IP addresses in audit logs
 app.set('trust proxy', true);
- 
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/table', tableRoutes);
@@ -28,7 +28,7 @@ app.use('/api/menu', menuRoutes);
 app.use('/api/orders', orderRoutes);
 
 // Serve static frontend files
-app.use(express.static(path.join(__dirname, 'frontend')));
+app.use(express.static(path.join(__dirname, 'frontend'), { extensions: ['html'] }));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
