@@ -7,7 +7,7 @@ const { requireRole, ROLES } = require("../middleware/rbac");
 // All routes protected by Auth
 router.use(authenticateToken);
 
-router.get("/", getTables); 
+router.get("/", getTables);
 router.post("/", requireRole(ROLES.MANAGEMENT), createTable);
 router.put("/:id", requireRole(ROLES.FLOOR_AND_MANAGEMENT), updateTable);
 router.delete("/:id", requireRole(ROLES.MANAGEMENT), deleteTable);

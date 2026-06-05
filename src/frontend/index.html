@@ -21,6 +21,10 @@
         <section class="floor-plan-section">
             <div class="section-header">
                 <h2>Floor Plan</h2>
+                <div class="date-picker-container" style="margin-left: auto; margin-right: 15px;">
+                    <label for="mapDatePicker"><strong>View Date: </strong></label>
+                    <input type="date" id="mapDatePicker">
+                </div>
                 <button id="show-add-table-btn" class="btn-secondary" style="display: none;">+ Add Table</button>
             </div>
             <div class="legend">
@@ -53,6 +57,21 @@
                 <div class="form-group">
                     <label for="reservationTime">Reservation Time</label>
                     <input type="datetime-local" id="reservationTime" name="reservationTime" required>
+                </div>
+                <div class="form-group">
+                    <label for="reservationTableId">Select Table (Optional)</label>
+                    <select id="reservationTableId" name="reservationTableId">
+                        <option value="">-- Auto-assign Best Fit --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="reservationDuration">Duration</label>
+                    <select id="reservationDuration" name="reservationDuration">
+                        <option value="60">60 Minutes</option>
+                        <option value="90" selected>90 Minutes</option>
+                        <option value="120">120 Minutes</option>
+                        <option value="180">180 Minutes</option>
+                    </select>
                 </div>
                 <button type="submit" class="btn-primary" id="submit-reservation">Book Table</button>
             </form>
@@ -112,10 +131,8 @@
             </div>
             <div class="context-details">
                 <p>Status: <strong id="context-table-status"></strong></p>
-                <div id="context-reservation-info" class="hidden">
-                    <p>Reserved By: <strong id="context-res-name"></strong></p>
-                    <p>Party Size: <strong id="context-res-pax"></strong></p>
-                    <p>Time: <strong id="context-res-time"></strong></p>
+                <div id="context-reservations-list">
+                    <!-- Dynamic reservation list injected here -->
                 </div>
             </div>
             <div class="context-actions" id="context-actions">

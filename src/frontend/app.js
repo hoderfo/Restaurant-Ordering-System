@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const authBtn = document.getElementById('auth-btn');
     const userInfo = document.getElementById('user-info');
     const showAddTableBtn = document.getElementById('show-add-table-btn');
+    const mapDatePicker = document.getElementById('mapDatePicker');
 
     // Modals
     const loginModal = document.getElementById('login-modal');
@@ -27,6 +28,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialization
     updateAuthUI();
+
+    if (mapDatePicker) {
+        const todayStr = new Date().toLocaleDateString('en-CA');
+        mapDatePicker.value = todayStr;
+        mapDatePicker.addEventListener('change', () => {
+            renderTables();
+        });
+    }
+
     loadFloorPlan();
 
     // --- Authentication Logic ---
@@ -175,91 +185,146 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Only look at pending or seated reservations for today
-        const todayStr = new Date().toISOString().split('T')[0];
+        const todayStr = new Date().toLocaleDateString('en-CA');
+        const selectedDateStr = mapDatePicker ? mapDatePicker.value : todayStr;
+        const isToday = (selectedDateStr === todayStr);
+
         const activeResMap = {};
         currentReservations.forEach(r => {
-            // Date logic depends on how it's returned. In JS it might be a full ISO string.
-            // Let's just map all pending/seated for simplicity, since API returns mostly active ones
-            if (r.status === 'Pending' || r.status === 'Seated') {
-                activeResMap[r.table._id || r.table_id] = r;
+            const resDateStr = new Date(r.startTime).toLocaleDateString('en-CA');
+            if (resDateStr === selectedDateStr && (r.status === 'Pending' || r.status === 'Seated')) {
+                const tid = r.table._id || r.table_id;
+                
+                if (!activeResMap[tid]) activeResMap[tid] = [];
+                activeResMap[tid].push(r);
             }
         });
 
         currentTables.forEach(table => {
             const tableEl = document.createElement('div');
             let statusClass = table.status ? table.status.toLowerCase() : 'available';
-            const activeRes = activeResMap[table._id];
+            const activeResList = activeResMap[table._id];
 
-            // Override UI color if the table is physically available but has an upcoming reservation
-            if (statusClass === 'available' && activeRes && activeRes.status === 'Pending') {
-                statusClass = 'reserved';
+            // If it's a future date, ignore the current physical status of the table
+            if (!isToday) {
+                statusClass = 'available';
+            }
+
+            // Override UI color if the table has an upcoming reservation on the selected date
+            // Priority: Occupied/Cleaning > Reserved > Available
+            if (activeResList && activeResList.some(r => r.status === 'Pending')) {
+                if (!isToday || statusClass === 'available') {
+                    statusClass = 'reserved';
+                }
             }
 
             tableEl.className = `table-item ${statusClass}`;
             tableEl.innerHTML = `
-                <span class="table-name">T${table.label || table._id}</span>
+                <span class="table-name">${table.label || table._id}</span>
                 <span class="table-capacity">${table.capacity} pax</span>
             `;
 
-            tableEl.addEventListener('click', () => openTableContext(table, activeRes));
+            tableEl.addEventListener('click', () => openTableContext(table, activeResList));
             floorMap.appendChild(tableEl);
         });
+
+        // Populate table select dropdown in reservation form
+        const tableSelect = document.getElementById('reservationTableId');
+        if (tableSelect) {
+            tableSelect.innerHTML = '<option value="">-- Auto-assign Best Fit --</option>';
+            currentTables.forEach(t => {
+                tableSelect.innerHTML += `<option value="${t._id || t.table_id}">${t.label} (Seats ${t.capacity})</option>`;
+            });
+        }
     }
 
     // --- Table Context Modal Logic ---
     document.getElementById('close-context').addEventListener('click', () => tableContextModal.classList.add('hidden'));
 
-    function openTableContext(table, activeRes) {
-        selectedTableForContext = { table, activeRes };
+    function openTableContext(table, activeResList) {
+        selectedTableForContext = { table, activeResList };
 
         document.getElementById('context-table-name').textContent = `Table ${table.label || table._id}`;
         document.getElementById('context-table-status').textContent = table.status;
 
-        const resInfo = document.getElementById('context-reservation-info');
+        const listContainer = document.getElementById('context-reservations-list');
+        if (listContainer) listContainer.innerHTML = ''; // clear
+
         const actionBox = document.getElementById('context-actions');
         actionBox.innerHTML = ''; // clear buttons
 
-        if (activeRes) {
-            resInfo.classList.remove('hidden');
-            document.getElementById('context-res-name').textContent = activeRes.bookedBy;
-            document.getElementById('context-res-pax').textContent = activeRes.guests;
+        const todayStr = new Date().toLocaleDateString('en-CA');
+        const selectedDateStr = mapDatePicker ? mapDatePicker.value : todayStr;
+        const isToday = (selectedDateStr === todayStr);
 
-            // Format time nicely
-            const d = new Date(activeRes.startTime);
-            document.getElementById('context-res-time').textContent = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-            if (activeRes.status === 'Pending') {
-                actionBox.innerHTML += `<button class="btn-primary" onclick="manageReservation('${activeRes._id}', 'checkin')">Check In Guest</button>`;
-                actionBox.innerHTML += `<button class="btn-secondary" onclick="manageReservation('${activeRes._id}', 'cancel')">Cancel Reservation</button>`;
-                actionBox.innerHTML += `<button class="btn-secondary" onclick="manageReservation('${activeRes._id}', 'noshow')">Mark No-Show</button>`;
-            } else if (activeRes.status === 'Seated') {
-                if (table.status.toLowerCase() === 'cleaning') {
-                    actionBox.innerHTML += `<button class="btn-primary" onclick="freeTable('${table._id || table.table_id}')">Mark Cleaned (Available)</button>`;
-                } else {
-                    actionBox.innerHTML += `<button class="btn-secondary" onclick="markCleaning('${table._id}')">End Meal (Requires Cleaning)</button>`;
-                }
-            }
-        } else {
-            resInfo.classList.add('hidden');
+        // Define table-wide actions (not bound to a specific reservation)
+        let tableActionsHTML = '';
+        if (isToday) {
             if (table.status.toLowerCase() === 'available') {
-                actionBox.innerHTML += `<button class="btn-primary" onclick="walkInGuest('${table._id || table.table_id}')">Seat Walk-In Guest</button>`;
+                tableActionsHTML += `<button class="btn-primary" onclick="walkInGuest('${table._id || table.table_id}')">Seat Walk-In Guest</button>`;
             } else if (table.status.toLowerCase() === 'cleaning') {
-                actionBox.innerHTML += `<button class="btn-primary" onclick="freeTable('${table._id || table.table_id}')">Mark Cleaned (Available)</button>`;
+                tableActionsHTML += `<button class="btn-primary" onclick="freeTable('${table._id || table.table_id}')">Mark Cleaned (Available)</button>`;
             } else if (table.status.toLowerCase() === 'occupied') {
-                actionBox.innerHTML += `<button class="btn-primary" onclick="openOrderModal('${table._id || table.table_id}', '${table.label}')">Manage Orders</button>`;
-                actionBox.innerHTML += `<button class="btn-secondary" onclick="markCleaning('${table._id || table.table_id}')">End Meal (Requires Cleaning)</button>`;
+                tableActionsHTML += `<button class="btn-primary" onclick="openOrderModal('${table._id || table.table_id}', '${table.label}')">Manage Orders</button>`;
+                tableActionsHTML += `<button class="btn-secondary" onclick="markCleaning('${table._id || table.table_id}')">End Meal (Requires Cleaning)</button>`;
             }
         }
 
-        // Add Delete button for admins/managers
         if (user && (user.role === 'admin' || user.role === 'management')) {
-            actionBox.innerHTML += `<button class="btn-secondary" style="margin-top: 10px; background-color: #dc3545; color: white; border: none;" onclick="deleteTable('${table._id}')">Delete Table</button>`;
+            tableActionsHTML += `<button class="btn-secondary" style="margin-top: 10px; background-color: #dc3545; color: white; border: none;" onclick="deleteTable('${table._id}')">Delete Table</button>`;
         }
 
-        // Add Manage Orders button if seated via reservation
-        if (activeRes && activeRes.status === 'Seated') {
-            actionBox.innerHTML += `<button class="btn-primary" onclick="openOrderModal('${table._id || table.table_id}', '${table.label}')">Manage Orders</button>`;
+        if (activeResList && activeResList.length > 0) {
+            // Render selectable list of reservations
+            const ul = document.createElement('ul');
+            ul.style.listStyleType = 'none';
+            ul.style.padding = '0';
+            ul.style.margin = '10px 0';
+            
+            // Sort by time
+            const sortedList = [...activeResList].sort((a,b) => new Date(a.startTime) - new Date(b.startTime));
+
+            sortedList.forEach((res, index) => {
+                const li = document.createElement('li');
+                li.style.padding = '10px';
+                li.style.border = '1px solid #ddd';
+                li.style.marginBottom = '5px';
+                li.style.cursor = 'pointer';
+                li.style.borderRadius = '5px';
+                
+                const d = new Date(res.startTime);
+                const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                li.innerHTML = `<strong>${timeStr}</strong> - ${res.bookedBy} (${res.guests} pax) <br><small>Status: ${res.status}</small>`;
+                
+                li.onclick = () => {
+                    // Highlight selected item
+                    Array.from(ul.children).forEach(child => child.style.backgroundColor = 'transparent');
+                    li.style.backgroundColor = '#eef2ff'; // Light blue highlight
+                    
+                    // Render specific actions for THIS reservation
+                    actionBox.innerHTML = '';
+                    if (res.status === 'Pending') {
+                        if (isToday) {
+                            actionBox.innerHTML += `<button class="btn-primary" onclick="manageReservation('${res._id}', 'checkin')">Check In Guest</button>`;
+                        }
+                        actionBox.innerHTML += `<button class="btn-secondary" onclick="manageReservation('${res._id}', 'cancel')">Cancel Reservation</button>`;
+                        actionBox.innerHTML += `<button class="btn-secondary" onclick="manageReservation('${res._id}', 'noshow')">Mark No-Show</button>`;
+                    }
+                    
+                    // Add table-wide actions below
+                    actionBox.innerHTML += `<hr style="margin:15px 0;">` + tableActionsHTML;
+                };
+                
+                ul.appendChild(li);
+            });
+            
+            if (listContainer) listContainer.appendChild(ul);
+            
+            // Auto-select first reservation in the list
+            ul.children[0].click();
+        } else {
+            if (listContainer) listContainer.innerHTML = '';
+            actionBox.innerHTML = tableActionsHTML;
         }
 
         tableContextModal.classList.remove('hidden');
@@ -289,28 +354,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const guests = prompt("How many guests for this walk-in?", "2");
         if (!guests) return;
 
-        try {
-            // Wait, we need a walk-in API or just update table to occupied.
-            // Let's assume a walk-in updates the table status to 'occupied'.
-            const response = await fetch(`/api/table/${tableId}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ status: 'occupied' })
-            });
-            if (response.ok) {
-                showToast('Walk-in seated!', 'success');
-                tableContextModal.classList.add('hidden');
-                loadFloorPlan();
-            } else {
-                const data = await response.json();
-                showToast(data.message || 'Failed to seat walk-in', 'error');
-            }
-        } catch (error) {
-            showToast('Network error', 'error');
-        }
+        const payload = {
+            bookedBy: "Walk-in Guest",
+            contact: "N/A",
+            guests: parseInt(guests),
+            date: new Date().toISOString(),
+            duration: 90,
+            tableId: tableId,
+            isWalkIn: true
+        };
+
+        // Reuse submitReservationData so it triggers all capacity and overlap checks!
+        await submitReservationData(payload);
+        tableContextModal.classList.add('hidden');
     };
 
     window.deleteTable = async (tableId) => {
@@ -374,6 +430,48 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- Reservation Form Submission ---
+    async function submitReservationData(payload) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Booking...';
+
+        try {
+            const response = await fetch('/api/reservations', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                showToast(`Table ${data.table.name || data.table.label} booked successfully!`, 'success');
+                reservationForm.reset();
+                loadFloorPlan();
+            } else if (response.status === 409 && data.requiresOverride) {
+                if (confirm(data.message)) {
+                    if (data.suggestedTableId) {
+                        payload.tableId = data.suggestedTableId;
+                    }
+                    if (data.suggestedTime) {
+                        payload.date = data.suggestedTime;
+                    }
+                    payload.overrideWarningConfirmed = true;
+                    await submitReservationData(payload); // Recursive call to retry
+                }
+            } else {
+                showToast(data.message || data.error || 'Failed to create reservation', 'error');
+            }
+        } catch (error) {
+            showToast('An error occurred while booking.', 'error');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Book Table';
+        }
+    }
+
     reservationForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         if (!token) {
@@ -385,44 +483,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const customerPhone = document.getElementById('customerPhone').value;
         const partySize = parseInt(document.getElementById('partySize').value);
         const reservationTime = document.getElementById('reservationTime').value;
+        const reservationDuration = document.getElementById('reservationDuration').value;
+        const tableId = document.getElementById('reservationTableId').value;
 
-        submitBtn.disabled = true;
-        submitBtn.textContent = 'Booking...';
-
-        try {
-            const response = await fetch('/api/reservations', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    bookedBy: customerName,
-                    contact: customerPhone,
-                    guests: partySize,
-                    date: reservationTime // Controller extracts time from this
-                })
-            });
-
-            const data = await response.json();
-
-            if (response.ok) {
-                showToast(`Table ${data.table.label} booked successfully!`, 'success');
-                reservationForm.reset();
-                loadFloorPlan();
-            } else if (response.status === 409 && data.requiresOverride) {
-                if (confirm(data.message)) {
-                    alert("Override functionality requires additional UI. Try booking a different time.");
-                }
-            } else {
-                showToast(data.message || data.error || 'Failed to create reservation', 'error');
-            }
-        } catch (error) {
-            showToast('An error occurred while booking.', 'error');
-        } finally {
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Book Table';
+        const payload = {
+            bookedBy: customerName,
+            contact: customerPhone,
+            guests: partySize,
+            date: reservationTime,
+            duration: parseInt(reservationDuration)
+        };
+        if (tableId) {
+            payload.tableId = tableId;
         }
+
+        await submitReservationData(payload);
     });
 
     // --- Order Management Logic ---

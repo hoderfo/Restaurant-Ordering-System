@@ -22,7 +22,7 @@ CREATE TABLE reservations (
     start_time TIME NOT NULL,
     duration INT NOT NULL DEFAULT 90, -- in minutes!
     notes TEXT,
-    status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'seated', 'cancelled', 'no_show')),
+    status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'seated', 'cancelled', 'no_show', 'completed')),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     created_by INT REFERENCES users(user_id),
     cancelled_at TIMESTAMPTZ,
