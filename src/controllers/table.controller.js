@@ -62,7 +62,7 @@ const updateTable = async (req, res) => {
                     if (elapsedMins < 1) elapsedMins = 1;
 
                     await pool.query(
-                        "UPDATE reservations SET duration = $1 WHERE reservation_id = $2",
+                        "UPDATE reservations SET duration = $1, status = 'completed' WHERE reservation_id = $2",
                         [elapsedMins, r.reservation_id]
                     );
                 }

@@ -20,17 +20,7 @@ const findBestFitTable = async (guests, requestedStartTime, requestedEndTime, re
     const tables = result.rows;
 
     for (const table of tables) {
-        // Check for overlapping reservations for this table
-        const overlapQuery = `
-            SELECT * FROM reservations 
-            WHERE table_id = $1 
-            AND status IN ('pending', 'seated')
-            AND date = $2
-            AND (start_time + (duration * interval '1 minute')) > $3::time
-            AND start_time < $4::time
-        `;
-        // We need to parse date and time correctly.
-        // It's safer to just fetch all active reservations for the day and check in JS if time manipulation is tricky.
+        // We fetch all active reservations for the day and check overlaps mathematically in JS.
         const reqDate = getLocalDateString(requestedStartTime);
         
         const dayResResult = await pool.query(
@@ -88,6 +78,17 @@ const createReservation = async (req, res) => {
             }
             assignedTable = { ...tableResult.rows[0], _id: tableResult.rows[0].table_id, name: tableResult.rows[0].label };
 
+            // Check if party is too big for the table
+            if (guests > assignedTable.capacity) {
+                if (!overrideWarningConfirmed) {
+                    return res.status(409).json({ 
+                        success: false, 
+                        message: `Capacity Warning: Party size (${guests}) exceeds Table ${assignedTable.name}'s capacity (${assignedTable.capacity}). Do you want to proceed and squeeze them in?`,
+                        requiresOverride: true 
+                    });
+                }
+            }
+
             // Check if it fits (REQ-RTM-05 override check)
             if (assignedTable.capacity > guests) {
                 const isStartingSoon = (bufferedStartTime.getTime() - Date.now()) < 30 * 60000;
@@ -105,24 +106,21 @@ const createReservation = async (req, res) => {
 
             // Verify no overlaps for the manually selected table
             const reqDate = getLocalDateString(bufferedStartTime);
-            const dayResResult = await pool.query(
-                "SELECT * FROM reservations WHERE table_id = $1 AND status IN ('pending', 'seated') AND date = $2",
+            const overlapResult = await pool.query(
+                `SELECT r.*, t.status as current_table_status FROM reservations r
+                 JOIN tables t ON r.table_id = t.table_id
+                 WHERE r.table_id = $1 AND r.date = $2 AND r.status NOT IN ('cancelled', 'completed', 'no_show')`,
                 [assignedTable._id, reqDate]
             );
 
             let overlapping = null;
-            for (const r of dayResResult.rows) {
-                const dbDateStr = getLocalDateString(r.date);
-                const start = new Date(`${dbDateStr}T${r.start_time}`);
-                const end = new Date(start.getTime() + r.duration * 60000);
-                console.log('DEBUG CHECK:', {
-                    start: start.toISOString(),
-                    end: end.toISOString(),
-                    bufferedStart: bufferedStartTime.toISOString(),
-                    bufferedEnd: bufferedEndTime.toISOString()
-                });
+            for (let resRec of overlapResult.rows) {
+                // The 'completed' status now reliably handles ended meals.
+                const dbDateStr = getLocalDateString(resRec.date);
+                const start = new Date(`${dbDateStr}T${resRec.start_time}`);
+                const end = new Date(start.getTime() + resRec.duration * 60000);
                 if (start < bufferedEndTime && end > bufferedStartTime) {
-                    overlapping = { ...r, start, end };
+                    overlapping = { ...resRec, start, end };
                     break;
                 }
             }
@@ -165,9 +163,12 @@ const createReservation = async (req, res) => {
             }
         }
 
+        const isWalkIn = req.body.isWalkIn === true;
+        const initialStatus = isWalkIn ? 'seated' : 'pending';
+
         const insertQuery = `
             INSERT INTO reservations (table_id, customer_name, phone, party_size, date, start_time, duration, notes, status, created_by) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $10, $9) 
             RETURNING *
         `;
         const insertParams = [
@@ -179,11 +180,16 @@ const createReservation = async (req, res) => {
             startTime.toTimeString().split(' ')[0], // HH:MM:SS
             duration,
             notes || null,
-            req.user?.user_id || null // from auth middleware
+            req.user?.user_id || null, // from auth middleware
+            initialStatus
         ];
 
         const resResult = await pool.query(insertQuery, insertParams);
         const r = resResult.rows[0];
+
+        if (isWalkIn) {
+            await pool.query("UPDATE tables SET status = 'occupied' WHERE table_id = $1", [assignedTable._id]);
+        }
 
         const mappedReservation = {
             ...r,
@@ -245,8 +251,7 @@ const cancelReservation = async (req, res) => {
         const reservation = result.rows[0];
         reservation.status = capitalize(reservation.status);
         
-        // Revert table to available
-        await pool.query("UPDATE tables SET status = 'available' WHERE table_id = $1", [reservation.table_id]);
+        // Removed faulty table status revert to prevent state bugs
 
         res.status(200).json({ success: true, message: "Reservation cancelled", reservation: { ...reservation, _id: reservation.reservation_id } });
     } catch (error) {
@@ -276,76 +281,7 @@ const checkInReservation = async (req, res) => {
     }
 };
 
-const handleWalkIn = async (req, res) => {
-    try {
-        const { notes, tableId } = req.body;
-        const guests = parseInt(req.body.guests, 10) || 1;
-        const duration = 90;
 
-        const startTime = new Date();
-        const endTime = new Date(startTime.getTime() + (duration * 60000));
-        const bufferedStartTime = new Date(startTime.getTime() - (15 * 60000));
-        const bufferedEndTime = new Date(endTime.getTime() + (15 * 60000));
-
-        let assignedTable = null;
-
-        if (tableId) {
-            const tableResult = await pool.query('SELECT * FROM tables WHERE table_id = $1', [tableId]);
-            if (tableResult.rows.length > 0) {
-                assignedTable = { ...tableResult.rows[0], _id: tableResult.rows[0].table_id, name: tableResult.rows[0].label };
-            }
-        } else {
-            assignedTable = await findBestFitTable(guests, bufferedStartTime, bufferedEndTime, true);
-        }
-
-        if (!assignedTable) {
-            return res.status(400).json({ 
-                success: false, 
-                message: tableId ? "The selected table is invalid or not found." : "No available table can accommodate this party right now." 
-            });
-        }
-
-        const insertQuery = `
-            INSERT INTO reservations (table_id, customer_name, phone, party_size, date, start_time, duration, notes, status, created_by) 
-            VALUES ($1, 'Walk-in Guest', 'N/A', $2, $3, $4, $5, $6, 'seated', $7) 
-            RETURNING *
-        `;
-        const insertParams = [
-            assignedTable._id,
-            guests,
-            getLocalDateString(startTime),
-            startTime.toTimeString().split(' ')[0], // HH:MM:SS
-            duration,
-            notes || "Walk-in assignment",
-            req.user?.user_id || null
-        ];
-
-        const resResult = await pool.query(insertQuery, insertParams);
-        const r = resResult.rows[0];
-
-        const mappedReservation = {
-            ...r,
-            status: capitalize(r.status),
-            _id: r.reservation_id,
-            bookedBy: r.customer_name,
-            contact: r.phone,
-            guests: r.party_size,
-            startTime: new Date(`${getLocalDateString(r.date)}T${r.start_time}`)
-        };
-
-        await pool.query("UPDATE tables SET status = 'occupied' WHERE table_id = $1", [assignedTable._id]);
-        assignedTable.status = 'Occupied';
-
-        res.status(201).json({ 
-            success: true, 
-            message: "Walk-in guest seated", 
-            reservation: mappedReservation, 
-            table: assignedTable 
-        });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-};
 
 const markNoShow = async (req, res) => {
     try {
@@ -362,8 +298,7 @@ const markNoShow = async (req, res) => {
         const reservation = result.rows[0];
         reservation.status = capitalize(reservation.status);
         
-        // Revert table to available
-        await pool.query("UPDATE tables SET status = 'available' WHERE table_id = $1", [reservation.table_id]);
+        // Removed faulty table status revert to prevent state bugs
 
         res.status(200).json({ success: true, message: "Reservation marked as No-Show", reservation: { ...reservation, _id: reservation.reservation_id } });
     } catch (error) {
@@ -371,4 +306,4 @@ const markNoShow = async (req, res) => {
     }
 };
 
-module.exports = { createReservation, getReservations, cancelReservation, checkInReservation, handleWalkIn, markNoShow };
+module.exports = { createReservation, getReservations, cancelReservation, checkInReservation, markNoShow };
