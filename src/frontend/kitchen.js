@@ -35,7 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch('/api/orders/kitchen', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            
+
             if (res.status === 401 || res.status === 403) {
                 loginOverlay.classList.remove('hidden');
                 clearInterval(pollInterval);
@@ -63,10 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
         orders.forEach(item => {
             const ticket = document.createElement('div');
             ticket.className = `kds-ticket status-${item.status}`;
-            
-            const timeAgo = item.order_created_at ? 
-                Math.round((new Date() - new Date(item.order_created_at)) / 60000) + ' min ago' : 
-                'Just now';
+
 
             let actionBtn = '';
             if (item.status === 'pending') {
@@ -78,7 +75,6 @@ document.addEventListener('DOMContentLoaded', () => {
             ticket.innerHTML = `
                 <div class="ticket-header">
                     <h3>Table ${item.table_label}</h3>
-                    <span class="time-ago">${timeAgo}</span>
                 </div>
                 <div class="ticket-body">
                     <div class="ticket-item-name">${item.quantity}x ${item.menu_item_name}</div>
@@ -89,7 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     ${actionBtn}
                 </div>
             `;
-            
+
             kdsGrid.appendChild(ticket);
         });
     }
