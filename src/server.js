@@ -7,6 +7,7 @@ const tableRoutes = require('./routes/table.router');
 const reservationRoutes = require('./routes/reservation.router');
 const menuRoutes = require('./routes/menu.router');
 const orderRoutes = require('./routes/order.router');
+const analyticsRoutes = require('./routes/analytics.router');
 const pool = require('./config/db');
 
 const app = express();
@@ -26,6 +27,8 @@ app.use('/api/table', tableRoutes);
 app.use('/api/reservations', reservationRoutes);
 app.use('/api/menu', menuRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/reports', analyticsRoutes);
 
 // Serve static frontend files
 app.use(express.static(path.join(__dirname, 'frontend'), { extensions: ['html'] }));
