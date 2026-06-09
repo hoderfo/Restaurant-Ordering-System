@@ -1,3 +1,4 @@
+-- OUTDATED
 -- Test Users (password: "password123")
 -- Password hash generated with bcrypt
 INSERT INTO users (username, password_hash, role) VALUES
