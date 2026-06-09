@@ -153,3 +153,113 @@ exports.updateOrderItemStatus = async (req, res) => {
         res.status(500).json({ success: false, message: 'Server error' });
     }
 };
+
+exports.checkoutOrder = async (req, res) => {
+    const { orderId } = req.params;
+    const { paymentMethod, discountType, discountValue, discountReason } = req.body;
+    const validPaymentMethods = ['cash', 'card', 'ewallet'];
+    const validDiscountTypes = ['percentage', 'flat', null];
+
+    if (!paymentMethod || !validPaymentMethods.includes(paymentMethod)) {
+        return res.status(400).json({ success: false, message: 'Invalid or missing paymentMethod. Use cash, card, or ewallet.' });
+    }
+
+    if (discountType && !validDiscountTypes.includes(discountType)) {
+        return res.status(400).json({ success: false, message: 'Invalid discountType. Use percentage, flat, or omit it.' });
+    }
+
+    try {
+        const orderResult = await pool.query('SELECT * FROM orders WHERE order_id = $1', [orderId]);
+        if (orderResult.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Order not found.' });
+        }
+
+        const order = orderResult.rows[0];
+        if (order.status !== 'active') {
+            return res.status(400).json({ success: false, message: 'Only active orders can be checked out.' });
+        }
+
+        const billExists = await pool.query('SELECT bill_id FROM bills WHERE order_id = $1', [orderId]);
+        if (billExists.rows.length > 0) {
+            return res.status(400).json({ success: false, message: 'Order already billed.' });
+        }
+
+        const itemsResult = await pool.query(
+            'SELECT quantity, unit_price FROM order_items WHERE order_id = $1',
+            [orderId]
+        );
+
+        if (itemsResult.rows.length === 0) {
+            return res.status(400).json({ success: false, message: 'Cannot checkout an order without items.' });
+        }
+
+        const subtotal = itemsResult.rows.reduce((sum, item) => sum + Number(item.unit_price) * item.quantity, 0);
+        const taxRate = 10.0;
+        const taxAmount = Number((subtotal * taxRate / 100).toFixed(2));
+
+        let discount = 0;
+        let normalizedDiscountValue = 0;
+        if (discountType && discountValue != null) {
+            normalizedDiscountValue = Number(discountValue);
+            if (Number.isNaN(normalizedDiscountValue) || normalizedDiscountValue < 0) {
+                return res.status(400).json({ success: false, message: 'Invalid discountValue.' });
+            }
+
+            if (discountType === 'percentage') {
+                if (normalizedDiscountValue > 100) {
+                    return res.status(400).json({ success: false, message: 'percentage discountValue cannot exceed 100.' });
+                }
+                discount = Number((subtotal * normalizedDiscountValue / 100).toFixed(2));
+            } else if (discountType === 'flat') {
+                discount = Number(normalizedDiscountValue.toFixed(2));
+                if (discount > subtotal + taxAmount) {
+                    return res.status(400).json({ success: false, message: 'flat discountValue cannot exceed bill total.' });
+                }
+            }
+        }
+
+        const total = Number((subtotal + taxAmount - discount).toFixed(2));
+
+        const insertResult = await pool.query(
+            `INSERT INTO bills (
+                order_id, subtotal, tax_rate, tax_amount,
+                discount_type, discount_value, discount_amount, discount_reason,
+                total, payment_method, closed_at, closed_by
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), $11)
+            RETURNING *`,
+            [orderId, subtotal, taxRate, taxAmount, discountType || null, normalizedDiscountValue || null, discount, discountReason || null, total, paymentMethod, req.user.user_id]
+        );
+
+        await pool.query(
+            "UPDATE orders SET status = 'billed', locked_at = NOW() WHERE order_id = $1",
+            [orderId]
+        );
+
+        res.status(201).json({ success: true, bill: insertResult.rows[0] });
+    } catch (error) {
+        console.error('Error checking out order:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+exports.getBill = async (req, res) => {
+    const { orderId } = req.params;
+    try {
+        const result = await pool.query(
+            `SELECT b.*, o.status AS order_status
+             FROM bills b
+             JOIN orders o ON b.order_id = o.order_id
+             WHERE b.order_id = $1`,
+            [orderId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Bill not found.' });
+        }
+
+        res.json({ success: true, bill: result.rows[0] });
+    } catch (error) {
+        console.error('Error fetching bill:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
