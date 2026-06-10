@@ -24,7 +24,7 @@ const findBestFitTable = async (guests, requestedStartTime, requestedEndTime, re
         const dayReservations = await prisma.reservation.findMany({
             where: {
                 tableId: table.id,
-                status: { in: ['PENDING', 'SEATED'] },
+                status: { notIn: ['CANCELLED', 'NO_SHOW'] },
                 date: {
                     gte: reqDate,
                     lt: new Date(reqDate.getTime() + 24 * 60 * 60 * 1000)
@@ -184,6 +184,10 @@ const createReservation = async (req, res) => {
                 where: { id: assignedTable.id },
                 data: { status: 'OCCUPIED' }
             });
+            
+            if (req.app.locals.io) {
+                req.app.locals.io.emit('table:updated', { id: assignedTable.id, status: 'Occupied' });
+            }
         }
 
         const mappedReservation = {
@@ -195,6 +199,10 @@ const createReservation = async (req, res) => {
             guests: reservation.partySize,
             startTime: reservation.startTime
         };
+
+        if (req.app.locals.io) {
+            req.app.locals.io.emit('reservation:created', mappedReservation);
+        }
 
         res.status(201).json({ 
             success: true, 
@@ -253,6 +261,10 @@ const cancelReservation = async (req, res) => {
 
         reservation.status = capitalize(reservation.status);
 
+        if (req.app.locals.io) {
+            req.app.locals.io.emit('reservation:updated', { ...reservation, _id: reservation.id });
+        }
+
         res.status(200).json({ success: true, message: "Reservation cancelled", reservation: { ...reservation, _id: reservation.id } });
     } catch (error) {
         if (error.code === 'P2025') return res.status(404).json({ success: false, message: "Reservation not found" });
@@ -276,6 +288,11 @@ const checkInReservation = async (req, res) => {
             data: { status: 'OCCUPIED' }
         });
 
+        if (req.app.locals.io) {
+            req.app.locals.io.emit('table:updated', { id: reservation.tableId, status: 'Occupied' });
+            req.app.locals.io.emit('reservation:updated', { ...reservation, _id: reservation.id });
+        }
+
         res.status(200).json({ success: true, message: "Guest checked in", reservation: { ...reservation, _id: reservation.id } });
     } catch (error) {
         if (error.code === 'P2025') return res.status(404).json({ success: false, message: "Reservation not found" });
@@ -298,6 +315,10 @@ const markNoShow = async (req, res) => {
         });
 
         reservation.status = capitalize(reservation.status);
+
+        if (req.app.locals.io) {
+            req.app.locals.io.emit('reservation:updated', { ...reservation, _id: reservation.id });
+        }
 
         res.status(200).json({ success: true, message: "Reservation marked as No-Show", reservation: { ...reservation, _id: reservation.id } });
     } catch (error) {

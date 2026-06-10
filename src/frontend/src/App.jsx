@@ -16,6 +16,11 @@ const API_URL = 'http://localhost:3000/api';
 export const SocketContext = React.createContext();
 export const ApiContext = React.createContext();
 
+const savedToken = localStorage.getItem('token');
+if (savedToken) {
+  axios.defaults.headers.common['Authorization'] = `Bearer ${savedToken}`;
+}
+
 function App() {
   const [socket, setSocket] = useState(null);
   const [user, setUser] = useState(null);

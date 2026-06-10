@@ -16,6 +16,11 @@ const createTable = async (req, res) => {
         });
 
         createdTable.status = capitalize(createdTable.status);
+        
+        if (req.app.locals.io) {
+            req.app.locals.io.emit('table:created', { ...createdTable, _id: createdTable.id });
+        }
+
         res.status(201).json({ success: true, message: "Table created", table: { ...createdTable, _id: createdTable.id } });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -66,6 +71,11 @@ const updateTable = async (req, res) => {
         });
 
         table.status = capitalize(table.status);
+        
+        if (req.app.locals.io) {
+            req.app.locals.io.emit('table:updated', { ...table, _id: table.id });
+        }
+
         res.status(200).json({ success: true, message: "Table updated", table: { ...table, _id: table.id } });
     } catch (error) {
         if (error.code === 'P2025') return res.status(404).json({ success: false, message: "Table not found" });
@@ -78,28 +88,20 @@ const deleteTable = async (req, res) => {
         const { id } = req.params;
         const tableId = parseInt(id);
 
-        // Unlink from history to prevent foreign key constraint violations
-        await prisma.reservation.updateMany({
-            where: { tableId },
-            data: { tableId: null }
-        }).catch(() => { }); // ignore if tableId cannot be null depending on schema
-
-        await prisma.order.updateMany({
-            where: { tableId },
-            data: { tableId: null }
-        }).catch(() => { });
-
-        // Now actually check schema for nullable relation.
-        // Wait, the schema shows: tableId Int (Not nullable).
-        // If it's not nullable, we can't update to NULL.
-        // We might just need to delete the table and cascade if Prisma allows, but schema doesn't have onDelete: Cascade for tables.
-        // If they want to delete, we will just try deleting it.
-
+        // Standard Practice: We rely on Prisma's Foreign Key constraint (P2003)
+        // If there are existing reservations or orders, the deletion will fail and throw P2003.
+        // We do not set tableId to NULL because we want to preserve financial and historical data integrity.
+        
         await prisma.table.delete({ where: { id: tableId } });
+        
+        if (req.app.locals.io) {
+            req.app.locals.io.emit('table:deleted', { tableId: tableId });
+        }
+
         res.status(200).json({ success: true, message: "Table deleted" });
     } catch (error) {
         if (error.code === 'P2025') return res.status(404).json({ success: false, message: "Table not found" });
-        if (error.code === 'P2003') return res.status(400).json({ success: false, message: "Cannot delete table with existing orders/reservations" });
+        if (error.code === 'P2003') return res.status(400).json({ success: false, message: "Cannot delete this table because it has associated orders or reservations. Please mark it as INACTIVE instead to preserve history." });
         res.status(500).json({ success: false, message: error.message });
     }
 };

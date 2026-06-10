@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
 import { SocketContext, ApiContext } from '../App';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, CalendarPlus } from 'lucide-react';
+import TableDetailsModal from './TableDetailsModal';
+import ReservationBookingModal from './ReservationBookingModal';
 
 const FloorPlan = ({ user }) => {
   const socket = useContext(SocketContext);
@@ -9,19 +11,27 @@ const FloorPlan = ({ user }) => {
   
   const [tables, setTables] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [reservations, setReservations] = useState([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newLabel, setNewLabel] = useState('');
   const [newCapacity, setNewCapacity] = useState(4);
   const [addError, setAddError] = useState('');
   const [adding, setAdding] = useState(false);
+  const [selectedTable, setSelectedTable] = useState(null);
+  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+  const [bookingTableId, setBookingTableId] = useState(null);
 
   useEffect(() => {
     fetchTables();
+    fetchReservations();
 
     if (socket) {
       socket.on('table:updated', handleTableUpdate);
       socket.on('table:created', handleTableCreate);
       socket.on('table:deleted', handleTableDelete);
+      socket.on('reservation:created', fetchReservations);
+      socket.on('reservation:updated', fetchReservations);
+      socket.on('reservation:deleted', fetchReservations);
     }
 
     return () => {
@@ -29,9 +39,23 @@ const FloorPlan = ({ user }) => {
         socket.off('table:updated', handleTableUpdate);
         socket.off('table:created', handleTableCreate);
         socket.off('table:deleted', handleTableDelete);
+        socket.off('reservation:created', fetchReservations);
+        socket.off('reservation:updated', fetchReservations);
+        socket.off('reservation:deleted', fetchReservations);
       }
     };
   }, [socket]);
+
+  const fetchReservations = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/reservations`);
+      if (response.data.reservations) {
+        setReservations(response.data.reservations);
+      }
+    } catch (error) {
+      console.error('Error fetching reservations:', error);
+    }
+  };
 
   const fetchTables = async () => {
     try {
@@ -96,11 +120,46 @@ const FloorPlan = ({ user }) => {
     return <div className="text-center mt-4">Loading floor plan...</div>;
   }
 
+  const computeTableDisplayStatus = (table) => {
+    let status = table.status;
+    
+    const activeRes = reservations.filter(r => 
+      (r.tableId === table.id || r.tableId === table._id) && 
+      new Date(r.startTime).toDateString() === new Date().toDateString() &&
+      !['CANCELLED', 'NO_SHOW', 'COMPLETED'].includes(r.status?.toUpperCase())
+    );
+
+    if (activeRes.length > 0 && status?.toUpperCase() === 'AVAILABLE') {
+      return 'Reserved';
+    }
+
+    return status;
+  };
+
+  if (loading) {
+    return <div className="text-center mt-4">Loading floor plan...</div>;
+  }
+
+  if (loading) {
+    return <div className="text-center mt-4">Loading floor plan...</div>;
+  }
+
   return (
     <div className="floor-plan-container">
       <div className="flex" style={{ justifyContent: 'space-between', marginBottom: '2rem' }}>
         <h2>Restaurant Floor</h2>
         <div className="flex gap-2">
+          <button
+            type="button"
+            className="btn-primary flex gap-2"
+            style={{ alignItems: 'center' }}
+            onClick={() => {
+              setBookingTableId(null);
+              setIsBookingModalOpen(true);
+            }}
+          >
+            <CalendarPlus size={16} /> New Booking
+          </button>
           {user?.role === 'admin' || user?.role === 'management' ? (
             <button
               type="button"
@@ -125,26 +184,29 @@ const FloorPlan = ({ user }) => {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '1.5rem' }}>
-        {tables.map(table => (
-          <div 
-            key={table._id || table.id}
-            className="glass-panel"
-            style={{ 
-              borderTop: `4px solid ${getStatusColor(table.status)}`,
-              cursor: 'pointer',
-              transition: 'transform 0.2s',
-            }}
-            onClick={() => alert(`Clicked Table ${table.label}`)}
-            onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
-            onMouseOut={(e) => e.currentTarget.style.transform = 'none'}
-          >
-            <h3 style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>Table {table.label}</h3>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Capacity: {table.capacity}</p>
-            <p style={{ fontWeight: '500', color: getStatusColor(table.status), marginTop: '0.5rem' }}>
-              {table.status}
-            </p>
-          </div>
-        ))}
+        {tables.map(table => {
+          const displayStatus = computeTableDisplayStatus(table);
+          return (
+            <div 
+              key={table._id || table.id}
+              className="glass-panel"
+              style={{ 
+                borderTop: `4px solid ${getStatusColor(displayStatus)}`,
+                cursor: 'pointer',
+                transition: 'transform 0.2s',
+              }}
+              onClick={() => setSelectedTable(table)}
+              onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
+              onMouseOut={(e) => e.currentTarget.style.transform = 'none'}
+            >
+              <h3 style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>Table {table.label}</h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Capacity: {table.capacity}</p>
+              <p style={{ fontWeight: '500', color: getStatusColor(displayStatus), marginTop: '0.5rem' }}>
+                {displayStatus}
+              </p>
+            </div>
+          );
+        })}
       </div>
 
       {showAddModal && (
@@ -203,6 +265,35 @@ const FloorPlan = ({ user }) => {
             </form>
           </div>
         </div>
+      )}
+
+      {selectedTable && (
+        <TableDetailsModal 
+          table={selectedTable} 
+          reservations={reservations.filter(r => 
+            (r.tableId === selectedTable.id || r.tableId === selectedTable._id) && 
+            new Date(r.startTime).toDateString() === new Date().toDateString() &&
+            !['CANCELLED', 'NO_SHOW', 'COMPLETED'].includes(r.status?.toUpperCase())
+          )}
+          onClose={() => setSelectedTable(null)}
+          onOpenReservation={(tableId) => {
+            setBookingTableId(tableId);
+            setIsBookingModalOpen(true);
+            setSelectedTable(null);
+          }}
+        />
+      )}
+
+      {isBookingModalOpen && (
+        <ReservationBookingModal 
+          preSelectedTableId={bookingTableId}
+          tables={tables}
+          onClose={() => setIsBookingModalOpen(false)}
+          onBookingSuccess={(res) => {
+            setIsBookingModalOpen(false);
+            window.alert(`Successfully booked! Customer: ${res.bookedBy || res.customerName}, Time: ${new Date(res.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`);
+          }}
+        />
       )}
     </div>
   );

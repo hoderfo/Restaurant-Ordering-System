@@ -11,10 +11,10 @@
   --text-main: #0F172A;
   --text-muted: #64748B;
   
-  --status-available: #10B981;
-  --status-reserved: #F59E0B;
-  --status-occupied: #EF4444;
-  --status-cleaning: #3B82F6;
+  --status-available: #10B981; /* Green */
+  --status-reserved: #3B82F6; /* Blue */
+  --status-occupied: #F59E0B; /* Orange */
+  --status-cleaning: #64748B; /* Gray */
   
   --border-radius: 12px;
   --transition: all 0.2s ease-in-out;
