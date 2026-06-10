@@ -19,8 +19,10 @@ const AuthModal = ({ onClose, onLogin }) => {
         password
       });
 
-      if (response.data.success) {
+      if (response.data.token && response.data.user) {
         onLogin(response.data.user, response.data.token);
+      } else {
+        setError('Login failed');
       }
     } catch (err) {
       setError(err.response?.data?.error || 'Login failed');

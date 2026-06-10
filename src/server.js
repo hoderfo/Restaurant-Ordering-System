@@ -9,6 +9,10 @@ require('dotenv').config();
 // Routes
 const authRoutes = require('./routes/auth');
 const analyticsRoutes = require('./routes/analytics.router');
+const tableRoutes = require('./routes/table.router');
+const menuRoutes = require('./routes/menu.router');
+const orderRoutes = require('./routes/order.router');
+const reservationRoutes = require('./routes/reservation.router');
 
 // Middleware
 const { authenticateToken } = require('./middleware/auth');
@@ -52,6 +56,10 @@ app.use('/api/reports', analyticsLimiter);
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/tables', tableRoutes);
+app.use('/api/menu', menuRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/reservations', reservationRoutes);
 app.use('/api/analytics', authenticateToken, analyticsRoutes);
 app.use('/api/reports', authenticateToken, analyticsRoutes);
 

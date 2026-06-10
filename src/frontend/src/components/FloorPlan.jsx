@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
 import { SocketContext, ApiContext } from '../App';
-import { Plus } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 
 const FloorPlan = ({ user }) => {
   const socket = useContext(SocketContext);
@@ -9,6 +9,11 @@ const FloorPlan = ({ user }) => {
   
   const [tables, setTables] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newLabel, setNewLabel] = useState('');
+  const [newCapacity, setNewCapacity] = useState(4);
+  const [addError, setAddError] = useState('');
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     fetchTables();
@@ -31,13 +36,37 @@ const FloorPlan = ({ user }) => {
   const fetchTables = async () => {
     try {
       const response = await axios.get(`${API_URL}/tables`);
-      if (response.data.success) {
+      if (response.data.tables) {
         setTables(response.data.tables);
       }
     } catch (error) {
       console.error('Error fetching tables:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAddTable = async (e) => {
+    e.preventDefault();
+    setAddError('');
+    setAdding(true);
+
+    try {
+      const response = await axios.post(`${API_URL}/tables`, {
+        label: newLabel.trim(),
+        capacity: parseInt(newCapacity, 10),
+      });
+
+      if (response.data.table) {
+        setTables((prev) => [...prev, response.data.table]);
+        setShowAddModal(false);
+        setNewLabel('');
+        setNewCapacity(4);
+      }
+    } catch (error) {
+      setAddError(error.response?.data?.message || error.response?.data?.error || 'Failed to add table');
+    } finally {
+      setAdding(false);
     }
   };
 
@@ -73,7 +102,15 @@ const FloorPlan = ({ user }) => {
         <h2>Restaurant Floor</h2>
         <div className="flex gap-2">
           {user?.role === 'admin' || user?.role === 'management' ? (
-            <button className="btn-primary flex gap-2" style={{ alignItems: 'center' }}>
+            <button
+              type="button"
+              className="btn-primary flex gap-2"
+              style={{ alignItems: 'center' }}
+              onClick={() => {
+                setAddError('');
+                setShowAddModal(true);
+              }}
+            >
               <Plus size={16} /> Add Table
             </button>
           ) : null}
@@ -109,6 +146,64 @@ const FloorPlan = ({ user }) => {
           </div>
         ))}
       </div>
+
+      {showAddModal && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h2>Add Table</h2>
+              <button
+                type="button"
+                onClick={() => setShowAddModal(false)}
+                className="btn-secondary"
+                style={{ padding: '0.25rem' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {addError && (
+              <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#EF4444', padding: '0.75rem', borderRadius: '8px', marginBottom: '1rem' }}>
+                {addError}
+              </div>
+            )}
+
+            <form onSubmit={handleAddTable}>
+              <div className="form-group">
+                <label>Table label</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="e.g. T9"
+                  value={newLabel}
+                  onChange={(e) => setNewLabel(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>Capacity</label>
+                <input
+                  type="number"
+                  className="form-input"
+                  min="1"
+                  max="20"
+                  value={newCapacity}
+                  onChange={(e) => setNewCapacity(e.target.value)}
+                  required
+                />
+              </div>
+              <button
+                type="submit"
+                className="btn-primary"
+                style={{ width: '100%', marginTop: '1rem' }}
+                disabled={adding}
+              >
+                {adding ? 'Adding...' : 'Create Table'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
