@@ -48,7 +48,7 @@ function setupWebSocketHandlers(io) {
         socket.emit('dashboard:metrics', metrics);
 
         // Log subscription
-        console.log('${socket.user.username} subscribed to dashboard: ${date}`);
+        console.log(`${socket.user.username} subscribed to dashboard: ${date}`);
       } catch (error) {
         socket.emit('error', { message: 'Failed to fetch dashboard' });
         console.error('Dashboard subscription error:', error);

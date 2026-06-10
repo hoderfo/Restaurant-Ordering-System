@@ -8,7 +8,7 @@ require('dotenv').config();
 
 // Routes
 const authRoutes = require('./routes/auth');
-const analyticsRoutes = require('./routes/analytics_router');
+const analyticsRoutes = require('./routes/analytics.router');
 
 // Middleware
 const { authenticateToken } = require('./middleware/auth');
@@ -99,9 +99,16 @@ app.get('/api/backup/history', authenticateToken, requireRole(ROLES.ADMIN), asyn
   }
 });
 
-// 404 NOT FOUND :<
-app.use((req, res) => {
-  res.status(404).json({ error: 'Route not found' });
+// Serve React Frontend
+const path = require('path');
+app.use(express.static(path.join(__dirname, 'frontend/dist')));
+
+// 404 NOT FOUND for APIs, otherwise serve React App :<
+app.use((req, res, next) => {
+  if (req.originalUrl.startsWith('/api')) {
+    return res.status(404).json({ error: 'Route not found' });
+  }
+  res.sendFile(path.join(__dirname, 'frontend/dist/index.html'));
 });
 
 // Error Handler
@@ -122,7 +129,7 @@ app.use((error, req, res, next) => {
 // Shutdown
 process.on('SIGINT', async () => {
   console.log('\nShutting down...');
-  
+
   server.close(() => {
     console.log('HTTP server closed :>');
   });

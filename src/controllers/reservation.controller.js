@@ -1,39 +1,40 @@
-const pool = require("../config/db");
+const prisma = require("../config/db");
 
 const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : s;
 
 const pad = (n) => n.toString().padStart(2, '0');
 const getLocalDateString = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
-// Best-Fit Algorithm to find the optimal table
 const findBestFitTable = async (guests, requestedStartTime, requestedEndTime, requireAvailableNow = false) => {
-    let query = 'SELECT * FROM tables WHERE capacity >= $1';
-    const params = [guests];
-
-    if (requireAvailableNow) {
-        query += " AND status = 'available'";
-    }
-
-    query += ' ORDER BY capacity ASC, length(label) ASC, label ASC'; // Sort fix
-
-    const result = await pool.query(query, params);
-    const tables = result.rows;
+    let tables = await prisma.table.findMany({
+        where: {
+            capacity: { gte: guests },
+            ...(requireAvailableNow ? { status: 'AVAILABLE' } : {})
+        },
+        orderBy: [
+            { capacity: 'asc' },
+            { label: 'asc' } // Approximate sorting by length isn't directly supported in Prisma without raw queries, fallback to label asc
+        ]
+    });
 
     for (const table of tables) {
-        // We fetch all active reservations for the day and check overlaps mathematically in JS.
-        const reqDate = getLocalDateString(requestedStartTime);
+        const reqDateStr = getLocalDateString(requestedStartTime);
+        const reqDate = new Date(`${reqDateStr}T00:00:00.000Z`);
         
-        const dayResResult = await pool.query(
-            "SELECT * FROM reservations WHERE table_id = $1 AND status IN ('pending', 'seated') AND date = $2",
-            [table.table_id, reqDate]
-        );
+        const dayReservations = await prisma.reservation.findMany({
+            where: {
+                tableId: table.id,
+                status: { in: ['PENDING', 'SEATED'] },
+                date: {
+                    gte: reqDate,
+                    lt: new Date(reqDate.getTime() + 24 * 60 * 60 * 1000)
+                }
+            }
+        });
 
         let hasOverlap = false;
-        for (const res of dayResResult.rows) {
-            // The DB returns date at midnight local time, but toISOString converts it to UTC (which shifts it 1 day back in UTC+7).
-            // Using getLocalDateString ensures we extract the local date correctly.
-            const dbDateStr = getLocalDateString(res.date);
-            const start = new Date(`${dbDateStr}T${res.start_time}`);
+        for (const res of dayReservations) {
+            const start = new Date(res.startTime);
             const end = new Date(start.getTime() + res.duration * 60000);
             
             if (start < requestedEndTime && end > requestedStartTime) {
@@ -43,42 +44,34 @@ const findBestFitTable = async (guests, requestedStartTime, requestedEndTime, re
         }
 
         if (!hasOverlap) {
-            return { ...table, _id: table.table_id, name: table.label }; 
+            return { ...table, _id: table.id, name: table.label }; 
         }
     }
-    return null; // No table available
+    return null;
 };
 
 const createReservation = async (req, res) => {
     try {
         const { bookedBy, contact, date, tableId, overrideWarningConfirmed, notes } = req.body;
-        console.log("CREATE RESERVATION CALLED. req.body:", req.body);
-        console.log("tableId value:", tableId, "type:", typeof tableId);
-        // Postgres uses customer_name, phone instead of bookedBy, contact.
         
         const guests = parseInt(req.body.guests, 10) || 1;
         const duration = parseInt(req.body.duration, 10) || 90;
 
-        const startTime = new Date(date); // assuming 'date' contains the full timestamp from frontend
+        const startTime = new Date(date);
         const endTime = new Date(startTime.getTime() + (duration * 60000));
         
-        // Include 15-minute buffers
         const bufferedStartTime = new Date(startTime.getTime() - (15 * 60000));
         const bufferedEndTime = new Date(endTime.getTime() + (15 * 60000));
 
         let assignedTable = null;
 
         if (tableId) {
-            // Manual specific table assignment
-            const tableResult = await pool.query('SELECT * FROM tables WHERE table_id = $1', [tableId]);
-            if (tableResult.rows.length === 0) {
-                console.log("TABLE NOT FOUND IN DB. tableId used:", tableId);
-                require('fs').appendFileSync('404_errors.log', `404 Error - tableId used: ${tableId} (type: ${typeof tableId})\n`);
-                return res.status(404).json({ success: false, message: `Selected table not found. (tableId sent: ${tableId})` });
+            const table = await prisma.table.findUnique({ where: { id: parseInt(tableId) } });
+            if (!table) {
+                return res.status(404).json({ success: false, message: `Selected table not found.` });
             }
-            assignedTable = { ...tableResult.rows[0], _id: tableResult.rows[0].table_id, name: tableResult.rows[0].label };
+            assignedTable = { ...table, _id: table.id, name: table.label };
 
-            // Check if party is too big for the table
             if (guests > assignedTable.capacity) {
                 if (!overrideWarningConfirmed) {
                     return res.status(409).json({ 
@@ -89,7 +82,6 @@ const createReservation = async (req, res) => {
                 }
             }
 
-            // Check if it fits (REQ-RTM-05 override check)
             if (assignedTable.capacity > guests) {
                 const isStartingSoon = (bufferedStartTime.getTime() - Date.now()) < 30 * 60000;
                 const bestFit = await findBestFitTable(guests, bufferedStartTime, bufferedEndTime, isStartingSoon);
@@ -104,20 +96,23 @@ const createReservation = async (req, res) => {
                 }
             }
 
-            // Verify no overlaps for the manually selected table
-            const reqDate = getLocalDateString(bufferedStartTime);
-            const overlapResult = await pool.query(
-                `SELECT r.*, t.status as current_table_status FROM reservations r
-                 JOIN tables t ON r.table_id = t.table_id
-                 WHERE r.table_id = $1 AND r.date = $2 AND r.status NOT IN ('cancelled', 'completed', 'no_show')`,
-                [assignedTable._id, reqDate]
-            );
+            const reqDateStr = getLocalDateString(bufferedStartTime);
+            const reqDate = new Date(`${reqDateStr}T00:00:00.000Z`);
+
+            const overlapReservations = await prisma.reservation.findMany({
+                where: {
+                    tableId: assignedTable.id,
+                    date: {
+                        gte: reqDate,
+                        lt: new Date(reqDate.getTime() + 24 * 60 * 60 * 1000)
+                    },
+                    status: { notIn: ['CANCELLED', 'COMPLETED', 'NO_SHOW'] }
+                }
+            });
 
             let overlapping = null;
-            for (let resRec of overlapResult.rows) {
-                // The 'completed' status now reliably handles ended meals.
-                const dbDateStr = getLocalDateString(resRec.date);
-                const start = new Date(`${dbDateStr}T${resRec.start_time}`);
+            for (let resRec of overlapReservations) {
+                const start = new Date(resRec.startTime);
                 const end = new Date(start.getTime() + resRec.duration * 60000);
                 if (start < bufferedEndTime && end > bufferedStartTime) {
                     overlapping = { ...resRec, start, end };
@@ -126,14 +121,12 @@ const createReservation = async (req, res) => {
             }
 
             if (overlapping) {
-                // Suggest alternative
                 const isStartingSoon = (bufferedStartTime.getTime() - Date.now()) < 30 * 60000;
                 const alternativeTable = await findBestFitTable(guests, bufferedStartTime, bufferedEndTime, isStartingSoon);
                 
                 let suggestedTime = null;
                 if (!alternativeTable || alternativeTable._id === assignedTable._id) {
-                    const nextAvailableTime = new Date(overlapping.end.getTime() + 15 * 60000);
-                    suggestedTime = nextAvailableTime;
+                    suggestedTime = new Date(overlapping.end.getTime() + 15 * 60000);
                 }
                 
                 if (alternativeTable && alternativeTable._id !== assignedTable._id) {
@@ -164,41 +157,43 @@ const createReservation = async (req, res) => {
         }
 
         const isWalkIn = req.body.isWalkIn === true;
-        const initialStatus = isWalkIn ? 'seated' : 'pending';
+        const initialStatus = isWalkIn ? 'SEATED' : 'PENDING';
+        
+        const reqDateStr = getLocalDateString(startTime);
+        const reqDate = new Date(`${reqDateStr}T00:00:00.000Z`);
 
-        const insertQuery = `
-            INSERT INTO reservations (table_id, customer_name, phone, party_size, date, start_time, duration, notes, status, created_by) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $10, $9) 
-            RETURNING *
-        `;
-        const insertParams = [
-            assignedTable._id,
-            bookedBy,
-            contact,
-            guests,
-            getLocalDateString(startTime),
-            startTime.toTimeString().split(' ')[0], // HH:MM:SS
-            duration,
-            notes || null,
-            req.user?.user_id || null, // from auth middleware
-            initialStatus
-        ];
+        const createdByUserId = req.user?.user_id ? parseInt(req.user.user_id) : 1; // Fallback to 1 if not set in some environments
 
-        const resResult = await pool.query(insertQuery, insertParams);
-        const r = resResult.rows[0];
+        const reservation = await prisma.reservation.create({
+            data: {
+                tableId: assignedTable.id,
+                customerName: bookedBy,
+                phone: contact,
+                partySize: guests,
+                date: reqDate,
+                startTime: startTime,
+                duration: duration,
+                notes: notes || null,
+                status: initialStatus,
+                createdById: createdByUserId
+            }
+        });
 
         if (isWalkIn) {
-            await pool.query("UPDATE tables SET status = 'occupied' WHERE table_id = $1", [assignedTable._id]);
+            await prisma.table.update({
+                where: { id: assignedTable.id },
+                data: { status: 'OCCUPIED' }
+            });
         }
 
         const mappedReservation = {
-            ...r,
-            status: capitalize(r.status),
-            _id: r.reservation_id,
-            bookedBy: r.customer_name,
-            contact: r.phone,
-            guests: r.party_size,
-            startTime: new Date(`${getLocalDateString(r.date)}T${r.start_time}`)
+            ...reservation,
+            status: capitalize(reservation.status),
+            _id: reservation.id,
+            bookedBy: reservation.customerName,
+            contact: reservation.phone,
+            guests: reservation.partySize,
+            startTime: reservation.startTime
         };
 
         res.status(201).json({ 
@@ -208,28 +203,34 @@ const createReservation = async (req, res) => {
             table: assignedTable 
         });
     } catch (error) {
+        console.error("Error creating reservation:", error);
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
 const getReservations = async (req, res) => {
     try {
-        const result = await pool.query(`
-            SELECT r.*, t.label as table_label, t.capacity as table_capacity 
-            FROM reservations r
-            LEFT JOIN tables t ON r.table_id = t.table_id
-            ORDER BY r.date ASC, r.start_time ASC
-        `);
-        const reservations = result.rows.map(r => ({
+        const reservationsData = await prisma.reservation.findMany({
+            include: {
+                table: { select: { label: true, capacity: true } }
+            },
+            orderBy: [
+                { date: 'asc' },
+                { startTime: 'asc' }
+            ]
+        });
+
+        const reservations = reservationsData.map(r => ({
             ...r,
             status: capitalize(r.status),
-            _id: r.reservation_id,
-            table: { _id: r.table_id, name: r.table_label, capacity: r.table_capacity },
-            bookedBy: r.customer_name,
+            _id: r.id,
+            table: { _id: r.tableId, name: r.table.label, capacity: r.table.capacity },
+            bookedBy: r.customerName,
             contact: r.phone,
-            guests: r.party_size,
-            startTime: new Date(`${getLocalDateString(r.date)}T${r.start_time}`)
+            guests: r.partySize,
+            startTime: r.startTime
         }));
+
         res.status(200).json({ success: true, reservations });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -239,22 +240,22 @@ const getReservations = async (req, res) => {
 const cancelReservation = async (req, res) => {
     try {
         const { id } = req.params;
-        const result = await pool.query(
-            "UPDATE reservations SET status = 'cancelled', cancelled_at = NOW(), cancelled_by = $1 WHERE reservation_id = $2 RETURNING *",
-            [req.user?.user_id || null, id]
-        );
+        const userId = req.user?.user_id ? parseInt(req.user.user_id) : null;
 
-        if (result.rows.length === 0) {
-            return res.status(404).json({ success: false, message: "Reservation not found" });
-        }
-        
-        const reservation = result.rows[0];
+        const reservation = await prisma.reservation.update({
+            where: { id: parseInt(id) },
+            data: {
+                status: 'CANCELLED',
+                cancelledAt: new Date(),
+                cancelledById: userId
+            }
+        });
+
         reservation.status = capitalize(reservation.status);
-        
-        // Removed faulty table status revert to prevent state bugs
 
-        res.status(200).json({ success: true, message: "Reservation cancelled", reservation: { ...reservation, _id: reservation.reservation_id } });
+        res.status(200).json({ success: true, message: "Reservation cancelled", reservation: { ...reservation, _id: reservation.id } });
     } catch (error) {
+        if (error.code === 'P2025') return res.status(404).json({ success: false, message: "Reservation not found" });
         res.status(500).json({ success: false, message: error.message });
     }
 };
@@ -262,46 +263,45 @@ const cancelReservation = async (req, res) => {
 const checkInReservation = async (req, res) => {
     try {
         const { id } = req.params;
-        const result = await pool.query(
-            "UPDATE reservations SET status = 'seated' WHERE reservation_id = $1 RETURNING *",
-            [id]
-        );
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({ success: false, message: "Reservation not found" });
-        }
         
-        const reservation = result.rows[0];
-        reservation.status = capitalize(reservation.status);
-        await pool.query("UPDATE tables SET status = 'occupied' WHERE table_id = $1", [reservation.table_id]);
+        const reservation = await prisma.reservation.update({
+            where: { id: parseInt(id) },
+            data: { status: 'SEATED' }
+        });
 
-        res.status(200).json({ success: true, message: "Guest checked in", reservation: { ...reservation, _id: reservation.reservation_id } });
+        reservation.status = capitalize(reservation.status);
+
+        await prisma.table.update({
+            where: { id: reservation.tableId },
+            data: { status: 'OCCUPIED' }
+        });
+
+        res.status(200).json({ success: true, message: "Guest checked in", reservation: { ...reservation, _id: reservation.id } });
     } catch (error) {
+        if (error.code === 'P2025') return res.status(404).json({ success: false, message: "Reservation not found" });
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
-
-
 const markNoShow = async (req, res) => {
     try {
         const { id } = req.params;
-        const result = await pool.query(
-            "UPDATE reservations SET status = 'no_show', cancelled_at = NOW(), cancelled_by = $1 WHERE reservation_id = $2 RETURNING *",
-            [req.user?.user_id || null, id]
-        );
+        const userId = req.user?.user_id ? parseInt(req.user.user_id) : null;
 
-        if (result.rows.length === 0) {
-            return res.status(404).json({ success: false, message: "Reservation not found" });
-        }
-        
-        const reservation = result.rows[0];
+        const reservation = await prisma.reservation.update({
+            where: { id: parseInt(id) },
+            data: {
+                status: 'NO_SHOW',
+                cancelledAt: new Date(),
+                cancelledById: userId
+            }
+        });
+
         reservation.status = capitalize(reservation.status);
-        
-        // Removed faulty table status revert to prevent state bugs
 
-        res.status(200).json({ success: true, message: "Reservation marked as No-Show", reservation: { ...reservation, _id: reservation.reservation_id } });
+        res.status(200).json({ success: true, message: "Reservation marked as No-Show", reservation: { ...reservation, _id: reservation.id } });
     } catch (error) {
+        if (error.code === 'P2025') return res.status(404).json({ success: false, message: "Reservation not found" });
         res.status(500).json({ success: false, message: error.message });
     }
 };

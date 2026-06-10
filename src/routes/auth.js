@@ -2,7 +2,7 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const prisma = require('../config/db');
-const { logAudit } = require('../services/audit.service');
+const auditService = require('../services/audit.service');
 const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
@@ -28,7 +28,7 @@ router.post('/login', async (req, res) => {
 
     if (!user) {
       // Log failed attempt
-      await logAudit(null, 'LOGIN_FAILED', 'auth', false, req.ip, {
+      await auditService.logAction(null, 'LOGIN_FAILED', 'auth', false, req.ip, {
         username,
         reason: 'user_not_found'
       });
@@ -43,7 +43,7 @@ router.post('/login', async (req, res) => {
 
     if (!validPassword) {
       // Log failed attempt
-      await logAudit(user.id, 'LOGIN_FAILED', 'auth', false, req.ip, {
+      await auditService.logAction(user.id, 'LOGIN_FAILED', 'auth', false, req.ip, {
         username,
         reason: 'invalid_password'
       });
@@ -65,7 +65,7 @@ router.post('/login', async (req, res) => {
     );
 
     // Log successful login
-    await logAudit(user.id, 'LOGIN_SUCCESS', 'auth', true, req.ip, { username });
+    await auditService.logAction(user.id, 'LOGIN_SUCCESS', 'auth', true, req.ip, { username });
 
     res.json({
       token,
