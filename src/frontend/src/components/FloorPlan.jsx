@@ -117,7 +117,14 @@ const FloorPlan = ({ user }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket]);
 
-  const getStatusColor = (status) => {
+  const getNextTableNumber = () => {
+    if (!tables || tables.length === 0) return 1;
+    const numbers = tables
+      .map(t => parseInt(t.label.toString().replace(/\D/g, ''), 10))
+      .filter(n => !isNaN(n));
+    if (numbers.length === 0) return 1;
+    return Math.max(...numbers) + 1;
+  }; const getStatusColor = (status) => {
     switch (status?.toUpperCase()) {
       case 'AVAILABLE': return 'var(--status-available)';
       case 'RESERVED': return 'var(--status-reserved)';
@@ -189,6 +196,7 @@ const FloorPlan = ({ user }) => {
               style={{ alignItems: 'center', padding: '0.6rem 1.2rem', fontSize: '1rem', borderRadius: '8px' }}
               onClick={() => {
                 setAddError('');
+                setNewLabel(getNextTableNumber().toString());
                 setShowAddModal(true);
               }}
             >
@@ -251,9 +259,9 @@ const FloorPlan = ({ user }) => {
               <div className="form-group">
                 <label>Table label</label>
                 <input
-                  type="text"
+                  type="number"
                   className="form-input"
-                  placeholder="e.g. T9"
+                  placeholder="e.g. 9"
                   value={newLabel}
                   onChange={(e) => setNewLabel(e.target.value)}
                   required

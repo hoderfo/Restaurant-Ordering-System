@@ -9,18 +9,31 @@ const findBestFitTable = async (guests, requestedStartTime, requestedEndTime, re
     let tables = await prisma.table.findMany({
         where: {
             capacity: { gte: guests },
+            isActive: true,
             ...(requireAvailableNow ? { status: 'AVAILABLE' } : {})
         },
         orderBy: [
-            { capacity: 'asc' },
-            { label: 'asc' } // Approximate sorting by length isn't directly supported in Prisma without raw queries, fallback to label asc
+            { capacity: 'asc' }
         ]
+    });
+
+
+    tables.sort((a, b) => {
+        if (a.capacity === b.capacity) {
+            const numA = parseInt(a.label.replace(/\D/g, ''), 10);
+            const numB = parseInt(b.label.replace(/\D/g, ''), 10);
+            if (!isNaN(numA) && !isNaN(numB)) {
+                return numA - numB;
+            }
+            return a.label.localeCompare(b.label);
+        }
+        return 0; // capacity is already sorted correctly by Prisma
     });
 
     for (const table of tables) {
         const reqDateStr = getLocalDateString(requestedStartTime);
         const reqDate = new Date(`${reqDateStr}T00:00:00.000Z`);
-        
+
         const dayReservations = await prisma.reservation.findMany({
             where: {
                 tableId: table.id,
@@ -36,7 +49,7 @@ const findBestFitTable = async (guests, requestedStartTime, requestedEndTime, re
         for (const res of dayReservations) {
             const start = new Date(res.startTime);
             const end = new Date(start.getTime() + res.duration * 60000);
-            
+
             if (start < requestedEndTime && end > requestedStartTime) {
                 hasOverlap = true;
                 break;
@@ -44,7 +57,7 @@ const findBestFitTable = async (guests, requestedStartTime, requestedEndTime, re
         }
 
         if (!hasOverlap) {
-            return { ...table, _id: table.id, name: table.label }; 
+            return { ...table, _id: table.id, name: table.label };
         }
     }
     return null;
@@ -53,13 +66,13 @@ const findBestFitTable = async (guests, requestedStartTime, requestedEndTime, re
 const createReservation = async (req, res) => {
     try {
         const { bookedBy, contact, date, tableId, overrideWarningConfirmed, notes } = req.body;
-        
+
         const guests = parseInt(req.body.guests, 10) || 1;
         const duration = parseInt(req.body.duration, 10) || 90;
 
         const startTime = new Date(date);
         const endTime = new Date(startTime.getTime() + (duration * 60000));
-        
+
         const bufferedStartTime = new Date(startTime.getTime() - (15 * 60000));
         const bufferedEndTime = new Date(endTime.getTime() + (15 * 60000));
 
@@ -67,17 +80,17 @@ const createReservation = async (req, res) => {
 
         if (tableId) {
             const table = await prisma.table.findUnique({ where: { id: parseInt(tableId) } });
-            if (!table) {
+            if (!table || !table.isActive) {
                 return res.status(404).json({ success: false, message: `Selected table not found.` });
             }
             assignedTable = { ...table, _id: table.id, name: table.label };
 
             if (guests > assignedTable.capacity) {
                 if (!overrideWarningConfirmed) {
-                    return res.status(409).json({ 
-                        success: false, 
+                    return res.status(409).json({
+                        success: false,
                         message: `Capacity Warning: Party size (${guests}) exceeds Table ${assignedTable.name}'s capacity (${assignedTable.capacity}). Do you want to proceed and squeeze them in?`,
-                        requiresOverride: true 
+                        requiresOverride: true
                     });
                 }
             }
@@ -87,10 +100,10 @@ const createReservation = async (req, res) => {
                 const bestFit = await findBestFitTable(guests, bufferedStartTime, bufferedEndTime, isStartingSoon);
                 if (bestFit && bestFit._id !== assignedTable._id && bestFit.capacity < assignedTable.capacity) {
                     if (!overrideWarningConfirmed) {
-                        return res.status(409).json({ 
-                            success: false, 
+                        return res.status(409).json({
+                            success: false,
                             message: `Capacity Warning: Table ${assignedTable.name} seats ${assignedTable.capacity}, but party size is ${guests}. Table ${bestFit.name} (Seats ${bestFit.capacity}) is available. Do you want to proceed?`,
-                            requiresOverride: true 
+                            requiresOverride: true
                         });
                     }
                 }
@@ -123,12 +136,12 @@ const createReservation = async (req, res) => {
             if (overlapping) {
                 const isStartingSoon = (bufferedStartTime.getTime() - Date.now()) < 30 * 60000;
                 const alternativeTable = await findBestFitTable(guests, bufferedStartTime, bufferedEndTime, isStartingSoon);
-                
+
                 let suggestedTime = null;
                 if (!alternativeTable || alternativeTable._id === assignedTable._id) {
                     suggestedTime = new Date(overlapping.end.getTime() + 15 * 60000);
                 }
-                
+
                 if (alternativeTable && alternativeTable._id !== assignedTable._id) {
                     return res.status(409).json({
                         success: false,
@@ -139,7 +152,7 @@ const createReservation = async (req, res) => {
                 } else if (suggestedTime) {
                     return res.status(409).json({
                         success: false,
-                        message: `The table is booked. It is available later at ${suggestedTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}. Book it for this time instead?`,
+                        message: `The table is booked. It is available later at ${suggestedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Book it for this time instead?`,
                         requiresOverride: true,
                         suggestedTableId: assignedTable._id,
                         suggestedTime: suggestedTime.toISOString()
@@ -158,7 +171,7 @@ const createReservation = async (req, res) => {
 
         const isWalkIn = req.body.isWalkIn === true;
         const initialStatus = isWalkIn ? 'SEATED' : 'PENDING';
-        
+
         const reqDateStr = getLocalDateString(startTime);
         const reqDate = new Date(`${reqDateStr}T00:00:00.000Z`);
 
@@ -184,7 +197,7 @@ const createReservation = async (req, res) => {
                 where: { id: assignedTable.id },
                 data: { status: 'OCCUPIED' }
             });
-            
+
             if (req.app.locals.io) {
                 req.app.locals.io.emit('table:updated', { id: assignedTable.id, status: 'Occupied' });
             }
@@ -204,11 +217,11 @@ const createReservation = async (req, res) => {
             req.app.locals.io.emit('reservation:created', mappedReservation);
         }
 
-        res.status(201).json({ 
-            success: true, 
-            message: "Reservation created successfully", 
-            reservation: mappedReservation, 
-            table: assignedTable 
+        res.status(201).json({
+            success: true,
+            message: "Reservation created successfully",
+            reservation: mappedReservation,
+            table: assignedTable
         });
     } catch (error) {
         console.error("Error creating reservation:", error);
@@ -275,7 +288,7 @@ const cancelReservation = async (req, res) => {
 const checkInReservation = async (req, res) => {
     try {
         const { id } = req.params;
-        
+
         const reservation = await prisma.reservation.update({
             where: { id: parseInt(id) },
             data: { status: 'SEATED' }
