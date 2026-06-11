@@ -95,7 +95,7 @@ const ReservationBookingModal = ({ onClose, onBookingSuccess, tables = [] }) => 
         {warningData ? (
           <div style={{ backgroundColor: 'rgba(245, 158, 11, 0.1)', color: '#D97706', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
             <h3 style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              ⚠️ Capacity/Availability Warning
+              ⚠️ {warningData.warningType === 'CAPACITY' ? 'Capacity Warning' : 'Availability Warning'}
             </h3>
             <p style={{ marginBottom: '1rem' }}>{warningData.message}</p>
             
@@ -118,12 +118,14 @@ const ReservationBookingModal = ({ onClose, onBookingSuccess, tables = [] }) => 
                  </button>
               )}
 
-              <button 
-                className="btn-secondary" 
-                onClick={() => handleSubmit(null, true, formData.tableId, null)}
-              >
-                Proceed anyway (Squeeze in)
-              </button>
+              {warningData.warningType === 'CAPACITY' && (
+                <button 
+                  className="btn-secondary" 
+                  onClick={() => handleSubmit(null, true, formData.tableId, null)}
+                >
+                  Proceed anyway (Squeeze in)
+                </button>
+              )}
 
               <button 
                 className="btn-secondary" 

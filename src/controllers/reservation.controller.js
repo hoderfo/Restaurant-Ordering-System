@@ -92,7 +92,8 @@ const createReservation = async (req, res) => {
                     return res.status(409).json({
                         success: false,
                         message: `Capacity Warning: Party size (${guests}) exceeds Table ${assignedTable.name}'s capacity (${assignedTable.capacity}). Do you want to proceed and squeeze them in?`,
-                        requiresOverride: true
+                        requiresOverride: true,
+                        warningType: 'CAPACITY'
                     });
                 }
             }
@@ -105,7 +106,8 @@ const createReservation = async (req, res) => {
                         return res.status(409).json({
                             success: false,
                             message: `Capacity Warning: Table ${assignedTable.name} seats ${assignedTable.capacity}, but party size is ${guests}. Table ${bestFit.name} (Seats ${bestFit.capacity}) is available. Do you want to proceed?`,
-                            requiresOverride: true
+                            requiresOverride: true,
+                            warningType: 'CAPACITY'
                         });
                     }
                 }
@@ -149,7 +151,8 @@ const createReservation = async (req, res) => {
                         success: false,
                         message: `The selected table is already booked. However, Table ${alternativeTable.name} (Seats ${alternativeTable.capacity}) is available! Book Table ${alternativeTable.name} instead?`,
                         requiresOverride: true,
-                        suggestedTableId: alternativeTable._id
+                        suggestedTableId: alternativeTable._id,
+                        warningType: 'AVAILABILITY'
                     });
                 } else if (suggestedTime) {
                     return res.status(409).json({
@@ -157,7 +160,8 @@ const createReservation = async (req, res) => {
                         message: `The table is booked. It is available later at ${suggestedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Book it for this time instead?`,
                         requiresOverride: true,
                         suggestedTableId: assignedTable._id,
-                        suggestedTime: suggestedTime.toISOString()
+                        suggestedTime: suggestedTime.toISOString(),
+                        warningType: 'AVAILABILITY'
                     });
                 } else {
                     return res.status(400).json({ success: false, message: "The selected table is already booked and no alternative tables are available." });
