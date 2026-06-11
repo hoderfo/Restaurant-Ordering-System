@@ -5,6 +5,8 @@ const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase
 const pad = (n) => n.toString().padStart(2, '0');
 const getLocalDateString = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
+const BUFFER_TIME_MINS = 15;
+
 const findBestFitTable = async (guests, requestedStartTime, requestedEndTime, requireAvailableNow = false) => {
     let tables = await prisma.table.findMany({
         where: {
@@ -73,8 +75,8 @@ const createReservation = async (req, res) => {
         const startTime = new Date(date);
         const endTime = new Date(startTime.getTime() + (duration * 60000));
 
-        const bufferedStartTime = new Date(startTime.getTime() - (15 * 60000));
-        const bufferedEndTime = new Date(endTime.getTime() + (15 * 60000));
+        const bufferedStartTime = new Date(startTime.getTime() - (BUFFER_TIME_MINS * 60000));
+        const bufferedEndTime = new Date(endTime.getTime() + (BUFFER_TIME_MINS * 60000));
 
         let assignedTable = null;
 
@@ -139,7 +141,7 @@ const createReservation = async (req, res) => {
 
                 let suggestedTime = null;
                 if (!alternativeTable || alternativeTable._id === assignedTable._id) {
-                    suggestedTime = new Date(overlapping.end.getTime() + 15 * 60000);
+                    suggestedTime = new Date(overlapping.end.getTime() + BUFFER_TIME_MINS * 60000);
                 }
 
                 if (alternativeTable && alternativeTable._id !== assignedTable._id) {
