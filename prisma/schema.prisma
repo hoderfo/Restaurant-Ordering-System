@@ -39,6 +39,7 @@ model Table {
   capacity  Int
   status    TableStatus @default(AVAILABLE)
   createdAt DateTime    @default(now())
+  isActive  Boolean     @default(true)
 
   reservations Reservation[]
   orders       Order[]

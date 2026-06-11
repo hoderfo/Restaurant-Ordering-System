@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
 import { SocketContext, ApiContext } from '../App';
 
@@ -8,22 +8,6 @@ const KitchenView = ({ user }) => {
   
   const [kitchenOrders, setKitchenOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetchKitchenOrders();
-
-    if (socket) {
-      socket.on('order:new_item', handleNewItem);
-      socket.on('order:item_updated', handleItemUpdated);
-    }
-
-    return () => {
-      if (socket) {
-        socket.off('order:new_item', handleNewItem);
-        socket.off('order:item_updated', handleItemUpdated);
-      }
-    };
-  }, [socket]);
 
   const fetchKitchenOrders = async () => {
     try {
@@ -54,6 +38,24 @@ const KitchenView = ({ user }) => {
       return prev.map(o => o.order_item_id === updatedItem.order_item_id ? { ...o, ...updatedItem } : o);
     });
   };
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchKitchenOrders();
+
+    if (socket) {
+      socket.on('order:new_item', handleNewItem);
+      socket.on('order:item_updated', handleItemUpdated);
+    }
+
+    return () => {
+      if (socket) {
+        socket.off('order:new_item', handleNewItem);
+        socket.off('order:item_updated', handleItemUpdated);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [socket]);
 
   const updateStatus = async (itemId, newStatus) => {
     try {

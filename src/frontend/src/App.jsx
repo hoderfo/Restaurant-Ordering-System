@@ -1,8 +1,10 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import io from 'socket.io-client';
 import axios from 'axios';
 import { ChefHat, LayoutGrid } from 'lucide-react';
+import { Toaster } from 'react-hot-toast';
 import './index.css';
 
 // Components
@@ -27,16 +29,21 @@ function App() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
 
   useEffect(() => {
-    const newSocket = io(SOCKET_URL);
+    const savedToken = localStorage.getItem('token');
+    
+    const newSocket = io(SOCKET_URL, {
+      auth: { token: savedToken }
+    });
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSocket(newSocket);
     
-    const savedToken = localStorage.getItem('token');
     const savedUser = localStorage.getItem('user');
     if (savedToken && savedUser) {
       try {
         setUser(JSON.parse(savedUser));
         axios.defaults.headers.common['Authorization'] = `Bearer ${savedToken}`;
-      } catch (e) {
+      } catch (error) {
+        console.error("Failed to parse user data:", error);
         localStorage.removeItem('token');
         localStorage.removeItem('user');
       }
@@ -50,6 +57,9 @@ function App() {
     localStorage.removeItem('user');
     setUser(null);
     delete axios.defaults.headers.common['Authorization'];
+    if (socket) {
+      socket.disconnect();
+    }
   };
 
   return (
@@ -57,6 +67,10 @@ function App() {
       <ApiContext.Provider value={API_URL}>
         <Router>
           <div className="app-container">
+            <Toaster 
+              position="top-right" 
+              toastOptions={{ duration: 3000 }} 
+            />
             <header className="app-header">
               <div className="logo-container">
                 <h1>Tasty Station</h1>
@@ -92,6 +106,12 @@ function App() {
                   localStorage.setItem('token', token);
                   localStorage.setItem('user', JSON.stringify(userData));
                   axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+                  
+                  if (socket) {
+                    socket.auth = { token };
+                    socket.connect();
+                  }
+
                   setAuthModalOpen(false);
                 }}
               />

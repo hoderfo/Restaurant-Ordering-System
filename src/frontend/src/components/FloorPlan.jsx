@@ -1,14 +1,15 @@
-import React, { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
 import { SocketContext, ApiContext } from '../App';
 import { Plus, X, CalendarPlus } from 'lucide-react';
 import TableDetailsModal from './TableDetailsModal';
 import ReservationBookingModal from './ReservationBookingModal';
+import toast from 'react-hot-toast';
 
 const FloorPlan = ({ user }) => {
   const socket = useContext(SocketContext);
   const API_URL = useContext(ApiContext);
-  
+
   const [tables, setTables] = useState([]);
   const [loading, setLoading] = useState(true);
   const [reservations, setReservations] = useState([]);
@@ -19,32 +20,7 @@ const FloorPlan = ({ user }) => {
   const [adding, setAdding] = useState(false);
   const [selectedTable, setSelectedTable] = useState(null);
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
-  const [bookingTableId, setBookingTableId] = useState(null);
-
-  useEffect(() => {
-    fetchTables();
-    fetchReservations();
-
-    if (socket) {
-      socket.on('table:updated', handleTableUpdate);
-      socket.on('table:created', handleTableCreate);
-      socket.on('table:deleted', handleTableDelete);
-      socket.on('reservation:created', fetchReservations);
-      socket.on('reservation:updated', fetchReservations);
-      socket.on('reservation:deleted', fetchReservations);
-    }
-
-    return () => {
-      if (socket) {
-        socket.off('table:updated', handleTableUpdate);
-        socket.off('table:created', handleTableCreate);
-        socket.off('table:deleted', handleTableDelete);
-        socket.off('reservation:created', fetchReservations);
-        socket.off('reservation:updated', fetchReservations);
-        socket.off('reservation:deleted', fetchReservations);
-      }
-    };
-  }, [socket]);
+  const [viewDate, setViewDate] = useState(new Date().toISOString().split('T')[0]);
 
   const fetchReservations = async () => {
     try {
@@ -70,6 +46,21 @@ const FloorPlan = ({ user }) => {
     }
   };
 
+  const handleTableUpdate = (updatedTable) => {
+    setTables(prev => prev.map(t => t.id === updatedTable.id || t._id === updatedTable.id ? { ...t, ...updatedTable } : t));
+  };
+
+  const handleTableCreate = (newTable) => {
+    setTables(prev => {
+      if (prev.some(t => t.id === newTable.id || t._id === newTable._id)) return prev;
+      return [...prev, newTable];
+    });
+  };
+
+  const handleTableDelete = ({ tableId }) => {
+    setTables(prev => prev.filter(t => t.id !== tableId && t._id !== tableId));
+  };
+
   const handleAddTable = async (e) => {
     e.preventDefault();
     setAddError('');
@@ -82,7 +73,11 @@ const FloorPlan = ({ user }) => {
       });
 
       if (response.data.table) {
-        setTables((prev) => [...prev, response.data.table]);
+        setTables((prev) => {
+          if (prev.some(t => t.id === response.data.table.id)) return prev;
+          return [...prev, response.data.table];
+        });
+        toast.success(`Table ${response.data.table.label} created successfully`);
         setShowAddModal(false);
         setNewLabel('');
         setNewCapacity(4);
@@ -94,17 +89,33 @@ const FloorPlan = ({ user }) => {
     }
   };
 
-  const handleTableUpdate = (updatedTable) => {
-    setTables(prev => prev.map(t => t.id === updatedTable.id || t._id === updatedTable.id ? { ...t, ...updatedTable } : t));
-  };
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchTables();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchReservations();
 
-  const handleTableCreate = (newTable) => {
-    setTables(prev => [...prev, newTable]);
-  };
+    if (socket) {
+      socket.on('table:updated', handleTableUpdate);
+      socket.on('table:created', handleTableCreate);
+      socket.on('table:deleted', handleTableDelete);
+      socket.on('reservation:created', fetchReservations);
+      socket.on('reservation:updated', fetchReservations);
+      socket.on('reservation:deleted', fetchReservations);
+    }
 
-  const handleTableDelete = ({ tableId }) => {
-    setTables(prev => prev.filter(t => t.id !== tableId && t._id !== tableId));
-  };
+    return () => {
+      if (socket) {
+        socket.off('table:updated', handleTableUpdate);
+        socket.off('table:created', handleTableCreate);
+        socket.off('table:deleted', handleTableDelete);
+        socket.off('reservation:created', fetchReservations);
+        socket.off('reservation:updated', fetchReservations);
+        socket.off('reservation:deleted', fetchReservations);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [socket]);
 
   const getStatusColor = (status) => {
     switch (status?.toUpperCase()) {
@@ -122,10 +133,10 @@ const FloorPlan = ({ user }) => {
 
   const computeTableDisplayStatus = (table) => {
     let status = table.status;
-    
-    const activeRes = reservations.filter(r => 
-      (r.tableId === table.id || r.tableId === table._id) && 
-      new Date(r.startTime).toDateString() === new Date().toDateString() &&
+
+    const activeRes = reservations.filter(r =>
+      (r.tableId === table.id || r.tableId === table._id) &&
+      new Date(r.startTime).toDateString() === new Date(viewDate).toDateString() &&
       !['CANCELLED', 'NO_SHOW', 'COMPLETED'].includes(r.status?.toUpperCase())
     );
 
@@ -146,51 +157,57 @@ const FloorPlan = ({ user }) => {
 
   return (
     <div className="floor-plan-container">
-      <div className="flex" style={{ justifyContent: 'space-between', marginBottom: '2rem' }}>
-        <h2>Restaurant Floor</h2>
+      <div className="flex" style={{ justifyContent: 'space-between', marginBottom: '2rem', alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
+          <h2 style={{ margin: 0 }}>Restaurant Floor</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <label style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>View Date:</label>
+            <input
+              type="date"
+              className="form-input"
+              style={{ padding: '0.5rem 0.75rem', fontSize: '1rem', width: 'auto', borderRadius: '8px' }}
+              value={viewDate}
+              onChange={(e) => setViewDate(e.target.value)}
+            />
+          </div>
+        </div>
         <div className="flex gap-2">
           <button
             type="button"
             className="btn-primary flex gap-2"
-            style={{ alignItems: 'center' }}
+            style={{ alignItems: 'center', padding: '0.6rem 1.2rem', fontSize: '1rem', borderRadius: '8px' }}
             onClick={() => {
-              setBookingTableId(null);
               setIsBookingModalOpen(true);
             }}
           >
-            <CalendarPlus size={16} /> New Booking
+            <CalendarPlus size={20} /> New Booking
           </button>
           {user?.role === 'admin' || user?.role === 'management' ? (
             <button
               type="button"
               className="btn-primary flex gap-2"
-              style={{ alignItems: 'center' }}
+              style={{ alignItems: 'center', padding: '0.6rem 1.2rem', fontSize: '1rem', borderRadius: '8px' }}
               onClick={() => {
                 setAddError('');
                 setShowAddModal(true);
               }}
             >
-              <Plus size={16} /> Add Table
+              <Plus size={20} /> Add Table
             </button>
           ) : null}
         </div>
       </div>
 
-      <div className="legend flex gap-2" style={{ marginBottom: '2rem' }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem' }}><span style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: 'var(--status-available)' }}></span> Available</span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem' }}><span style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: 'var(--status-reserved)' }}></span> Reserved</span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem' }}><span style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: 'var(--status-occupied)' }}></span> Occupied</span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem' }}><span style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: 'var(--status-cleaning)' }}></span> Cleaning</span>
-      </div>
+
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '1.5rem' }}>
         {tables.map(table => {
           const displayStatus = computeTableDisplayStatus(table);
           return (
-            <div 
+            <div
               key={table._id || table.id}
               className="glass-panel"
-              style={{ 
+              style={{
                 borderTop: `4px solid ${getStatusColor(displayStatus)}`,
                 cursor: 'pointer',
                 transition: 'transform 0.2s',
@@ -268,30 +285,31 @@ const FloorPlan = ({ user }) => {
       )}
 
       {selectedTable && (
-        <TableDetailsModal 
-          table={selectedTable} 
-          reservations={reservations.filter(r => 
-            (r.tableId === selectedTable.id || r.tableId === selectedTable._id) && 
-            new Date(r.startTime).toDateString() === new Date().toDateString() &&
+        <TableDetailsModal
+          table={selectedTable}
+          reservations={reservations.filter(r =>
+            (r.tableId === selectedTable.id || r.tableId === selectedTable._id) &&
+            new Date(r.startTime).toDateString() === new Date(viewDate).toDateString() &&
             !['CANCELLED', 'NO_SHOW', 'COMPLETED'].includes(r.status?.toUpperCase())
           )}
           onClose={() => setSelectedTable(null)}
-          onOpenReservation={(tableId) => {
-            setBookingTableId(tableId);
-            setIsBookingModalOpen(true);
+          onActionSuccess={() => {
             setSelectedTable(null);
+            fetchTables();
+            fetchReservations();
           }}
+          displayStatus={computeTableDisplayStatus(selectedTable)}
         />
       )}
 
       {isBookingModalOpen && (
-        <ReservationBookingModal 
-          preSelectedTableId={bookingTableId}
+        <ReservationBookingModal
           tables={tables}
           onClose={() => setIsBookingModalOpen(false)}
           onBookingSuccess={(res) => {
             setIsBookingModalOpen(false);
-            window.alert(`Successfully booked! Customer: ${res.bookedBy || res.customerName}, Time: ${new Date(res.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`);
+            setReservations(prev => [...prev, res]);
+            toast.success(`Successfully booked! Customer: ${res.bookedBy || res.customerName}, Table: ${res.table?.name || 'Assigned'}, Time: ${new Date(res.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
           }}
         />
       )}

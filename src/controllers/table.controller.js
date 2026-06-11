@@ -29,7 +29,10 @@ const createTable = async (req, res) => {
 
 const getTables = async (req, res) => {
     try {
-        const tablesResult = await prisma.table.findMany({ orderBy: { id: 'asc' } });
+        const tablesResult = await prisma.table.findMany({ 
+            where: { isActive: true },
+            orderBy: { id: 'asc' } 
+        });
         // Map id to _id for frontend compatibility
         const tables = tablesResult.map(t => ({ ...t, _id: t.id, status: capitalize(t.status) }));
         res.status(200).json({ success: true, tables });
@@ -88,11 +91,32 @@ const deleteTable = async (req, res) => {
         const { id } = req.params;
         const tableId = parseInt(id);
 
-        // Standard Practice: We rely on Prisma's Foreign Key constraint (P2003)
-        // If there are existing reservations or orders, the deletion will fail and throw P2003.
-        // We do not set tableId to NULL because we want to preserve financial and historical data integrity.
-        
-        await prisma.table.delete({ where: { id: tableId } });
+        const table = await prisma.table.findUnique({
+            where: { id: tableId }
+        });
+
+        if (!table) return res.status(404).json({ success: false, message: "Table not found" });
+
+        if (table.status === 'OCCUPIED' || table.status === 'CLEANING') {
+            return res.status(400).json({ success: false, message: "Cannot delete an occupied or cleaning table. Please clear the table first." });
+        }
+
+        const activeReservations = await prisma.reservation.findMany({
+            where: { 
+                tableId: tableId, 
+                date: { gte: new Date(new Date().setHours(0,0,0,0)) },
+                status: { notIn: ['CANCELLED', 'NO_SHOW', 'COMPLETED'] }
+            }
+        });
+
+        if (activeReservations.length > 0) {
+            return res.status(400).json({ success: false, message: "Cannot delete this table because it has upcoming reservations." });
+        }
+
+        await prisma.table.update({ 
+            where: { id: tableId },
+            data: { isActive: false }
+        });
         
         if (req.app.locals.io) {
             req.app.locals.io.emit('table:deleted', { tableId: tableId });
@@ -101,7 +125,9 @@ const deleteTable = async (req, res) => {
         res.status(200).json({ success: true, message: "Table deleted" });
     } catch (error) {
         if (error.code === 'P2025') return res.status(404).json({ success: false, message: "Table not found" });
-        if (error.code === 'P2003') return res.status(400).json({ success: false, message: "Cannot delete this table because it has associated orders or reservations. Please mark it as INACTIVE instead to preserve history." });
+        if (error.code === 'P2003' || (error.message && error.message.includes('violates foreign key constraint'))) {
+            return res.status(400).json({ success: false, message: "Cannot delete this table because it has associated orders or reservations. Please mark it as INACTIVE instead to preserve history." });
+        }
         res.status(500).json({ success: false, message: error.message });
     }
 };

@@ -1,9 +1,10 @@
-import React, { useState, useContext } from 'react';
+import { useState, useContext } from 'react';
 import axios from 'axios';
 import { ApiContext } from '../App';
 import { X, Calendar, Clock, Users, User, Phone, FileText } from 'lucide-react';
+import toast from 'react-hot-toast';
 
-const ReservationBookingModal = ({ onClose, onBookingSuccess, preSelectedTableId = null, tables = [] }) => {
+const ReservationBookingModal = ({ onClose, onBookingSuccess, tables = [] }) => {
   const API_URL = useContext(ApiContext);
 
   const [isWalkIn, setIsWalkIn] = useState(false);
@@ -14,12 +15,11 @@ const ReservationBookingModal = ({ onClose, onBookingSuccess, preSelectedTableId
     date: new Date().toISOString().split('T')[0],
     time: new Date().toTimeString().substring(0, 5),
     duration: 90,
-    tableId: preSelectedTableId || '',
+    tableId: '',
     notes: ''
   });
 
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
   
   // Warning handling
   const [warningData, setWarningData] = useState(null);
@@ -32,7 +32,6 @@ const ReservationBookingModal = ({ onClose, onBookingSuccess, preSelectedTableId
   const handleSubmit = async (e, override = false, useSuggestedTable = null, useSuggestedTime = null) => {
     if (e) e.preventDefault();
     setLoading(true);
-    setError(null);
     setWarningData(null);
 
     try {
@@ -66,14 +65,17 @@ const ReservationBookingModal = ({ onClose, onBookingSuccess, preSelectedTableId
       const response = await axios.post(`${API_URL}/reservations`, payload);
       
       if (response.data.success) {
-        onBookingSuccess(response.data.reservation);
+        onBookingSuccess({
+          ...response.data.reservation,
+          table: response.data.table
+        });
       }
     } catch (err) {
       if (err.response?.status === 409 && err.response.data.requiresOverride) {
         // Backend asks for confirmation
         setWarningData(err.response.data);
       } else {
-        setError(err.response?.data?.message || err.message || 'Booking failed');
+        toast.error(err.response?.data?.message || err.message || 'Booking failed');
       }
     } finally {
       setLoading(false);
@@ -89,12 +91,6 @@ const ReservationBookingModal = ({ onClose, onBookingSuccess, preSelectedTableId
             <X size={20} />
           </button>
         </div>
-
-        {error && (
-          <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#EF4444', padding: '0.75rem', borderRadius: '8px', marginBottom: '1rem' }}>
-            {error}
-          </div>
-        )}
 
         {warningData ? (
           <div style={{ backgroundColor: 'rgba(245, 158, 11, 0.1)', color: '#D97706', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
