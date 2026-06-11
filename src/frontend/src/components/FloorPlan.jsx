@@ -124,7 +124,9 @@ const FloorPlan = ({ user }) => {
       .filter(n => !isNaN(n));
     if (numbers.length === 0) return 1;
     return Math.max(...numbers) + 1;
-  }; const getStatusColor = (status) => {
+  };
+
+  const getStatusColor = (status) => {
     switch (status?.toUpperCase()) {
       case 'AVAILABLE': return 'var(--status-available)';
       case 'RESERVED': return 'var(--status-reserved)';
@@ -133,10 +135,6 @@ const FloorPlan = ({ user }) => {
       default: return 'var(--surface-border)';
     }
   };
-
-  if (loading) {
-    return <div className="text-center mt-4">Loading floor plan...</div>;
-  }
 
   const computeTableDisplayStatus = (table) => {
     let status = table.status;
@@ -153,10 +151,6 @@ const FloorPlan = ({ user }) => {
 
     return status;
   };
-
-  if (loading) {
-    return <div className="text-center mt-4">Loading floor plan...</div>;
-  }
 
   if (loading) {
     return <div className="text-center mt-4">Loading floor plan...</div>;
