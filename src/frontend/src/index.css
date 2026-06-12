@@ -42,8 +42,7 @@ body {
 }
 
 .app-header {
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(10px);
+  background: var(--surface);
   border-bottom: 1px solid var(--surface-border);
   padding: 1rem 2rem;
   display: flex;
@@ -57,9 +56,7 @@ body {
 .logo-container h1 {
   font-size: 1.5rem;
   font-weight: 700;
-  background: linear-gradient(135deg, #818CF8, #C084FC);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--primary);
 }
 
 .main-nav {
@@ -119,7 +116,6 @@ button {
 
 .btn-primary:hover {
   background-color: var(--primary-hover);
-  transform: translateY(-1px);
 }
 
 .btn-secondary {
@@ -134,8 +130,7 @@ button {
 
 /* Cards & Surfaces */
 .glass-panel {
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(12px);
+  background: var(--surface);
   border: 1px solid var(--surface-border);
   border-radius: var(--border-radius);
   padding: 1.5rem;
@@ -148,8 +143,7 @@ button {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(248, 250, 252, 0.8);
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.4);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -192,7 +186,7 @@ button {
   width: 100%;
   padding: 0.75rem;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--surface);
   border: 1px solid var(--surface-border);
   color: var(--text-main);
   font-family: inherit;
@@ -204,11 +198,7 @@ button {
   outline: none;
 }
 
-/* Animations */
-@keyframes slideUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
-}
+/* Animations disabled for performance */
 
 /* Utilities */
 .text-center { text-align: center; }
