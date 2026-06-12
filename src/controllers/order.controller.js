@@ -256,6 +256,21 @@ exports.checkoutOrder = async (req, res) => {
             data: { status: 'BILLED', lockedAt: new Date() }
         });
 
+        // End the meal
+        const updatedTable = await prisma.table.update({
+            where: { id: order.tableId },
+            data: { status: 'CLEANING' }
+        });
+
+        await prisma.reservation.updateMany({
+            where: { tableId: order.tableId, status: 'SEATED' },
+            data: { status: 'COMPLETED' }
+        });
+
+        if (req.app.locals.io) {
+            req.app.locals.io.emit('table:updated', { ...updatedTable, _id: updatedTable.id, status: 'Cleaning' });
+        }
+
         res.status(201).json({ success: true, bill });
     } catch (error) {
         console.error('Error checking out order:', error);

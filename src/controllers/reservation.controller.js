@@ -304,6 +304,21 @@ const checkInReservation = async (req, res) => {
     try {
         const { id } = req.params;
 
+        const existingReservation = await prisma.reservation.findUnique({
+            where: { id: parseInt(id) }
+        });
+
+        if (!existingReservation) {
+            return res.status(404).json({ success: false, message: "Reservation not found" });
+        }
+
+        const todayStr = getLocalDateString(new Date());
+        const resDateStr = `${existingReservation.date.getUTCFullYear()}-${pad(existingReservation.date.getUTCMonth() + 1)}-${pad(existingReservation.date.getUTCDate())}`;
+
+        if (todayStr !== resDateStr) {
+            return res.status(400).json({ success: false, message: "Cannot check in: Reservation is not for today." });
+        }
+
         const reservation = await prisma.reservation.update({
             where: { id: parseInt(id) },
             data: { status: 'SEATED' }
