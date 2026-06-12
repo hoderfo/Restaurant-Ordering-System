@@ -12,8 +12,8 @@ import FloorPlan from './components/FloorPlan';
 import KitchenView from './components/KitchenView';
 import AuthModal from './components/AuthModal';
 
-const SOCKET_URL = 'http://localhost:3000';
-const API_URL = 'http://localhost:3000/api';
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 export const SocketContext = React.createContext();
 export const ApiContext = React.createContext();

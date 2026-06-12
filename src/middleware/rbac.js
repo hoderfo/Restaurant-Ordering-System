@@ -1,4 +1,4 @@
-const { logAudit } = require('../services/audit.service');
+const auditService = require('../services/audit.service');
 
 function requireRole(allowedRoles) {
   return (req, res, next) => {
@@ -12,7 +12,7 @@ function requireRole(allowedRoles) {
 
     if (!allowedRoles.includes(userRole)) {
       // Log unauthorized access attempt
-      logAudit(
+      auditService.logAction(
         req.user.user_id,
         'ACCESS_DENIED',
         req.path,

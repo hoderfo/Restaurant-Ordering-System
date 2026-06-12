@@ -89,7 +89,7 @@ router.post('/login', async (req, res) => {
  */
 router.post('/logout', authenticateToken, async (req, res) => {
   try {
-    await logAudit(
+    await auditService.logAction(
       req.user.user_id,
       'LOGOUT',
       'auth',
