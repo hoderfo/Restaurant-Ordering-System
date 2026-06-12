@@ -76,6 +76,9 @@ model Reservation {
 
   orders Order[]
 
+  @@index([tableId])
+  @@index([date])
+  @@index([status])
   @@map("reservations")
 }
 
@@ -101,6 +104,8 @@ model Order {
   items OrderItem[]
   bill  Bill?
 
+  @@index([tableId])
+  @@index([status])
   @@map("orders")
 }
 
@@ -156,6 +161,8 @@ model OrderItem {
 
   voidLog VoidLog?
 
+  @@index([orderId])
+  @@index([status])
   @@map("order_items")
 }
 

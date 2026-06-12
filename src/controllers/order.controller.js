@@ -76,8 +76,24 @@ exports.addItemToOrder = async (req, res) => {
                 unitPrice: menuItem.price,
                 note: note || '',
                 status: 'PENDING'
+            },
+            include: {
+                menuItem: { select: { name: true } },
+                order: { include: { table: { select: { label: true } } } }
             }
         });
+
+        if (req.app.locals.io) {
+            req.app.locals.io.emit('order:new_item', {
+                order_item_id: orderItem.id,
+                quantity: orderItem.quantity,
+                note: orderItem.note,
+                status: orderItem.status.toLowerCase(),
+                created_at: orderItem.createdAt,
+                menu_item_name: orderItem.menuItem.name,
+                table_label: orderItem.order.table.label
+            });
+        }
 
         res.json({ success: true, orderItem });
     } catch (error) {
@@ -136,6 +152,13 @@ exports.updateOrderItemStatus = async (req, res) => {
             where: { id: parseInt(itemId) },
             data: { status: uppercaseStatus }
         });
+
+        if (req.app.locals.io) {
+            req.app.locals.io.emit('order:item_updated', {
+                order_item_id: orderItem.id,
+                status: orderItem.status
+            });
+        }
 
         res.json({ success: true, orderItem });
     } catch (error) {
@@ -218,7 +241,7 @@ exports.checkoutOrder = async (req, res) => {
                 taxRate: taxRate,
                 taxAmount: taxAmount,
                 discountType: uppercaseDiscountType,
-                discountValue: normalizedDiscountValue || null,
+                discountValue: uppercaseDiscountType ? normalizedDiscountValue : null,
                 discountAmount: discount,
                 discountReason: discountReason || null,
                 total: total,

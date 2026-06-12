@@ -3,11 +3,13 @@ import axios from 'axios';
 import { ApiContext } from '../App';
 import { X, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import OrderManagementModal from './OrderManagementModal';
 
 const TableDetailsModal = ({ table, reservations = [], onClose, displayStatus, onActionSuccess }) => {
   const API_URL = useContext(ApiContext);
   const [loading, setLoading] = useState(false);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [showOrderModal, setShowOrderModal] = useState(false);
 
   // Realtime updates via props will flow into the parent component, 
   // but we should display the most current table data.
@@ -101,6 +103,7 @@ const TableDetailsModal = ({ table, reservations = [], onClose, displayStatus, o
                 <button
                   className="btn-primary"
                   disabled={loading}
+                  onClick={() => setShowOrderModal(true)}
                 >
                   Manage Orders
                 </button>
@@ -213,6 +216,16 @@ const TableDetailsModal = ({ table, reservations = [], onClose, displayStatus, o
             </div>
           </div>
         </div>
+      )}
+
+      {showOrderModal && (
+        <OrderManagementModal
+          table={table}
+          onClose={() => {
+            setShowOrderModal(false);
+            if (onActionSuccess) onActionSuccess(); // Refresh floor plan if order was checked out
+          }}
+        />
       )}
     </div>
   );

@@ -19,6 +19,7 @@ const findBestFitTable = async (guests, requestedStartTime, requestedEndTime, re
         ]
     });
 
+    if (tables.length === 0) return null;
 
     tables.sort((a, b) => {
         if (a.capacity === b.capacity) {
@@ -32,20 +33,28 @@ const findBestFitTable = async (guests, requestedStartTime, requestedEndTime, re
         return 0; // capacity is already sorted correctly by Prisma
     });
 
-    for (const table of tables) {
-        const reqDateStr = getLocalDateString(requestedStartTime);
-        const reqDate = new Date(`${reqDateStr}T00:00:00.000Z`);
+    const reqDateStr = getLocalDateString(requestedStartTime);
+    const reqDate = new Date(`${reqDateStr}T00:00:00.000Z`);
 
-        const dayReservations = await prisma.reservation.findMany({
-            where: {
-                tableId: table.id,
-                status: { notIn: ['CANCELLED', 'NO_SHOW'] },
-                date: {
-                    gte: reqDate,
-                    lt: new Date(reqDate.getTime() + 24 * 60 * 60 * 1000)
-                }
+    const allDayReservations = await prisma.reservation.findMany({
+        where: {
+            tableId: { in: tables.map(t => t.id) },
+            status: { notIn: ['CANCELLED', 'NO_SHOW'] },
+            date: {
+                gte: reqDate,
+                lt: new Date(reqDate.getTime() + 24 * 60 * 60 * 1000)
             }
-        });
+        }
+    });
+
+    const resByTable = allDayReservations.reduce((acc, res) => {
+        if (!acc[res.tableId]) acc[res.tableId] = [];
+        acc[res.tableId].push(res);
+        return acc;
+    }, {});
+
+    for (const table of tables) {
+        const dayReservations = resByTable[table.id] || [];
 
         let hasOverlap = false;
         for (const res of dayReservations) {

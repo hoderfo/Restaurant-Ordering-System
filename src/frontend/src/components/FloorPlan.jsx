@@ -1,10 +1,36 @@
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, memo } from 'react';
 import axios from 'axios';
 import { SocketContext, ApiContext } from '../App';
 import { Plus, X, CalendarPlus } from 'lucide-react';
 import TableDetailsModal from './TableDetailsModal';
 import ReservationBookingModal from './ReservationBookingModal';
 import toast from 'react-hot-toast';
+
+const TableCard = memo(({ table, displayStatus, getStatusColor, onClick }) => {
+  return (
+    <div
+      className="glass-panel"
+      style={{
+        borderTop: `4px solid ${getStatusColor(displayStatus)}`,
+        cursor: 'pointer',
+      }}
+      onClick={() => onClick(table)}
+    >
+      <h3 style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>Table {table.label}</h3>
+      <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Capacity: {table.capacity}</p>
+      <p style={{ fontWeight: '500', color: getStatusColor(displayStatus), marginTop: '0.5rem' }}>
+        {displayStatus}
+      </p>
+    </div>
+  );
+}, (prevProps, nextProps) => {
+  return (
+    prevProps.table.id === nextProps.table.id &&
+    prevProps.table.status === nextProps.table.status &&
+    prevProps.table.capacity === nextProps.table.capacity &&
+    prevProps.displayStatus === nextProps.displayStatus
+  );
+});
 
 const FloorPlan = ({ user }) => {
   const socket = useContext(SocketContext);
@@ -203,29 +229,15 @@ const FloorPlan = ({ user }) => {
 
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '1.5rem' }}>
-        {tables.map(table => {
-          const displayStatus = computeTableDisplayStatus(table);
-          return (
-            <div
-              key={table._id || table.id}
-              className="glass-panel"
-              style={{
-                borderTop: `4px solid ${getStatusColor(displayStatus)}`,
-                cursor: 'pointer',
-                transition: 'transform 0.2s',
-              }}
-              onClick={() => setSelectedTable(table)}
-              onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
-              onMouseOut={(e) => e.currentTarget.style.transform = 'none'}
-            >
-              <h3 style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>Table {table.label}</h3>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Capacity: {table.capacity}</p>
-              <p style={{ fontWeight: '500', color: getStatusColor(displayStatus), marginTop: '0.5rem' }}>
-                {displayStatus}
-              </p>
-            </div>
-          );
-        })}
+        {tables.map(table => (
+          <TableCard 
+            key={table._id || table.id}
+            table={table}
+            displayStatus={computeTableDisplayStatus(table)}
+            getStatusColor={getStatusColor}
+            onClick={setSelectedTable}
+          />
+        ))}
       </div>
 
       {showAddModal && (

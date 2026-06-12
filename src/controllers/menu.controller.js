@@ -3,7 +3,7 @@ const prisma = require('../config/db');
 exports.getMenuItems = async (req, res) => {
     try {
         const menuItems = await prisma.menuItem.findMany({
-            where: { status: 'ACTIVE' },
+            where: { status: { in: ['ACTIVE', 'SOLD_OUT'] } },
             orderBy: [
                 { category: 'asc' },
                 { name: 'asc' }
