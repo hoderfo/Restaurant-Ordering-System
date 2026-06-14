@@ -12,6 +12,8 @@ import FloorPlan from './components/FloorPlan';
 import KitchenView from './components/KitchenView';
 import AuthModal from './components/AuthModal';
 import MenuManagement from './components/MenuManagement';
+import AdminLayout from './pages/admin/AdminLayout';
+import AdminDashboard from './pages/admin/AdminDashboard';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
@@ -80,6 +82,9 @@ function App() {
                 <Link to="/" className="nav-link"><LayoutGrid size={18} /> Floor Plan</Link>
                 <Link to="/kitchen" className="nav-link"><ChefHat size={18} /> Kitchen KDS</Link>
                 <Link to="/menu" className="nav-link">Menu Management</Link>
+                {user && user.role === 'admin' && (
+                  <Link to="/admin" className="nav-link" style={{color: '#e84118', fontWeight: 'bold'}}>Admin Portal</Link>
+                )}
               </nav>
               <div className="user-actions">
                 {user ? (
@@ -98,6 +103,15 @@ function App() {
                 <Route path="/" element={<FloorPlan user={user} />} />
                 <Route path="/kitchen" element={<KitchenView user={user} />} />
                 <Route path="/menu" element={<MenuManagement user={user} />} />
+                <Route path="/admin" element={<AdminLayout user={user} />}>
+                  <Route index element={<AdminDashboard />} />
+                  {/* Placeholder routes for other admin views */}
+                  <Route path="users" element={<div className="admin-content"><h2>Staff Users</h2><p>Coming soon...</p></div>} />
+                  <Route path="menu" element={<div className="admin-content"><h2>Menu Items</h2><p>Coming soon...</p></div>} />
+                  <Route path="tables" element={<div className="admin-content"><h2>Tables Setup</h2><p>Coming soon...</p></div>} />
+                  <Route path="analytics" element={<div className="admin-content"><h2>Reports & Logs</h2><p>Coming soon...</p></div>} />
+                  <Route path="system" element={<div className="admin-content"><h2>System Health</h2><p>Coming soon...</p></div>} />
+                </Route>
               </Routes>
             </main>
 
