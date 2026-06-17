@@ -11,7 +11,10 @@
 		"build:frontend": "cd src/frontend && npm run build",
 		"build": "npm run build:frontend",
 		"db:migrate": "prisma migrate dev",
-		"db:studio": "prisma studio"
+		"db:studio": "prisma studio",
+		"test": "jest --config jest.config.json --runInBand",
+		"test:unit": "jest tests/unit/ --config jest.config.json",
+		"test:system": "jest tests/system/ --config jest.config.json --runInBand"
 	},
 	"dependencies": {
 		"@prisma/client": "^6.19.3",
