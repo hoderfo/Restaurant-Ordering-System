@@ -150,13 +150,19 @@ exports.updateOrderItemStatus = async (req, res) => {
     try {
         const orderItem = await prisma.orderItem.update({
             where: { id: parseInt(itemId) },
-            data: { status: uppercaseStatus }
+            data: { status: uppercaseStatus },
+            include: {
+                menuItem: { select: { name: true } },
+                order: { include: { table: { select: { label: true } } } }
+            }
         });
 
         if (req.app.locals.io) {
             req.app.locals.io.emit('order:item_updated', {
                 order_item_id: orderItem.id,
-                status: orderItem.status
+                status: orderItem.status,
+                menu_item_name: orderItem.menuItem.name,
+                table_label: orderItem.order.table.label
             });
         }
 

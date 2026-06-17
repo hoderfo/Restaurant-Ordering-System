@@ -84,7 +84,7 @@ const ReservationBookingModal = ({ onClose, onBookingSuccess, tables = [] }) => 
 
   return (
     <div className="modal-overlay" style={{ zIndex: 1000 }}>
-      <div className="modal-content" style={{ maxWidth: '500px', width: '100%' }}>
+      <div className="modal-content" style={{ maxWidth: '700px', width: '100%' }}>
         <div className="modal-header">
           <h2>New Booking</h2>
           <button type="button" onClick={onClose} className="btn-secondary" style={{ padding: '0.25rem' }}>

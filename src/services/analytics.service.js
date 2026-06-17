@@ -84,7 +84,7 @@ class AnalyticsService {
     const avgOrderValue = orderCount > 0 ? totalRevenue / orderCount : 0;
 
     return {
-      date: date.toISOString().split('T')[0],
+      date: typeof date === 'string' ? date : date.toISOString().split('T')[0],
       metrics: {
         total_revenue: totalRevenue,
         order_count: orderCount,

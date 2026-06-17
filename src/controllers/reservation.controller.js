@@ -23,12 +23,7 @@ const findBestFitTable = async (guests, requestedStartTime, requestedEndTime, re
 
     tables.sort((a, b) => {
         if (a.capacity === b.capacity) {
-            const numA = parseInt(a.label.replace(/\D/g, ''), 10);
-            const numB = parseInt(b.label.replace(/\D/g, ''), 10);
-            if (!isNaN(numA) && !isNaN(numB)) {
-                return numA - numB;
-            }
-            return a.label.localeCompare(b.label);
+            return a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: 'base' });
         }
         return 0; // capacity is already sorted correctly by Prisma
     });

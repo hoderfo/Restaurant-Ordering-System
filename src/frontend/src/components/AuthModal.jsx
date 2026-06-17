@@ -33,7 +33,7 @@ const AuthModal = ({ onClose, onLogin }) => {
 
   return (
     <div className="modal-overlay">
-      <div className="modal-content">
+      <div className="modal-content" style={{ maxWidth: '450px', width: '100%' }}>
         <div className="modal-header">
           <h2>Staff Login</h2>
           <button onClick={onClose} className="btn-secondary" style={{ padding: '0.25rem' }}>
