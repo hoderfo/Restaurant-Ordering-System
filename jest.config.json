@@ -1,0 +1,12 @@
+{
+  "testEnvironment": "node",
+  "testMatch": [
+    "**/tests/**/*.test.js"
+  ],
+  "collectCoverageFrom": [
+    "src/services/**/*.js",
+    "src/controllers/**/*.js",
+    "src/middleware/**/*.js"
+  ],
+  "setupFiles": ["./tests/setup.js"]
+}
