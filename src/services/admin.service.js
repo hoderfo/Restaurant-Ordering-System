@@ -255,16 +255,21 @@ class AdminService {
       }),
       this.getSystemHealth()
     ]);
+	const recentActivity = await prisma.auditLog.findMany({
+	  include: { user: { select: { username: true } } },
+	  orderBy: { timestamp: 'desc' },
+	  take: 15
+	});
 
     return {
       timestamp: new Date().toISOString(),
-      system: {
+      systemStats: {
         totalUsers,
         totalTables,
         totalMenuItems,
         totalActiveReservations: activeReservations
       },
-      daily: {
+      todayMetrics: {
         orders: todayOrders,
         revenue: parseFloat((todayRevenue._sum.total || 0).toString()),
         failedLoginAttempts: failedLogins
@@ -322,6 +327,11 @@ class AdminService {
         }
       })
     ]);
+  	const recentActivity = await prisma.auditLog.findMany({
+      include: { user: { select: { username: true } } },
+      orderBy: { timestamp: 'desc' },
+      take: 50
+  	});
 
     return {
       period: `Last ${days} days`,
@@ -330,7 +340,8 @@ class AdminService {
         failed: failedLogins
       },
       accessDenials,
-      dataModifications
+      dataModifications,
+	  recentActivity
     };
   }
 }

@@ -2,12 +2,10 @@ const prisma = require('../config/db');
 
 class AnalyticsService {
   async getDashboardMetrics(date) {
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(date);
-    endOfDay.setHours(23, 59, 59, 999);
+    const dateStr = typeof date === 'string' ? date : date.toISOString().split('T')[0];
+    const startOfDay = new Date(dateStr + 'T00:00:00.000Z');
+    const endOfDay   = new Date(dateStr + 'T23:59:59.999Z');
 
-    // Get revenue
     const revenue = await prisma.bill.aggregate({
       where: {
         closedAt: {
@@ -72,6 +70,7 @@ class AnalyticsService {
           where: { id: item.menuItemId }
         });
         return {
+		  date: dateStr,
           menu_item_id: item.menuItemId,
           name: menuItem.name,
           category: menuItem.category,
