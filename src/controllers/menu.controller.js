@@ -1,11 +1,17 @@
-const pool = require('../config/db');
+const prisma = require('../config/db');
 
 exports.getMenuItems = async (req, res) => {
     try {
-        const result = await pool.query("SELECT * FROM menu_items WHERE status = 'active' ORDER BY category, name");
+        const menuItems = await prisma.menuItem.findMany({
+            where: { status: { in: ['ACTIVE', 'SOLD_OUT'] } },
+            orderBy: [
+                { category: 'asc' },
+                { name: 'asc' }
+            ]
+        });
         res.json({
             success: true,
-            menuItems: result.rows
+            menuItems
         });
     } catch (error) {
         console.error('Error fetching menu items:', error);
@@ -23,26 +29,31 @@ exports.createMenuItem = async (req, res) => {
         return res.status(400).json({ success: false, message: 'name, price and category are required.' });
     }
 
-    const allowedCategories = ['starter', 'main', 'dessert', 'beverage'];
-    const allowedStatuses = ['active', 'inactive', 'sold_out'];
+    const allowedCategories = ['STARTER', 'MAIN', 'DESSERT', 'BEVERAGE'];
+    const allowedStatuses = ['ACTIVE', 'INACTIVE', 'SOLD_OUT'];
+    const uppercaseCategory = category.toUpperCase();
+    const uppercaseStatus = status ? status.toUpperCase() : 'ACTIVE';
 
-    if (!allowedCategories.includes(category)) {
+    if (!allowedCategories.includes(uppercaseCategory)) {
         return res.status(400).json({ success: false, message: `Invalid category. Allowed: ${allowedCategories.join(', ')}` });
     }
 
-    if (status && !allowedStatuses.includes(status)) {
+    if (!allowedStatuses.includes(uppercaseStatus)) {
         return res.status(400).json({ success: false, message: `Invalid status. Allowed: ${allowedStatuses.join(', ')}` });
     }
 
     try {
-        const insertResult = await pool.query(
-            `INSERT INTO menu_items (name, description, price, category, status)
-             VALUES ($1, $2, $3, $4, $5)
-             RETURNING *`,
-            [name, description || '', price, category, status || 'active']
-        );
+        const menuItem = await prisma.menuItem.create({
+            data: {
+                name,
+                description: description || '',
+                price: parseFloat(price),
+                category: uppercaseCategory,
+                status: uppercaseStatus
+            }
+        });
 
-        res.status(201).json({ success: true, menuItem: insertResult.rows[0] });
+        res.status(201).json({ success: true, menuItem });
     } catch (error) {
         console.error('Error creating menu item:', error);
         res.status(500).json({ success: false, message: 'Server Error: Failed to create menu item' });
@@ -53,60 +64,46 @@ exports.updateMenuItem = async (req, res) => {
     const { id } = req.params;
     const { name, description, price, category, status } = req.body;
 
-    const allowedCategories = ['starter', 'main', 'dessert', 'beverage'];
-    const allowedStatuses = ['active', 'inactive', 'sold_out'];
+    const allowedCategories = ['STARTER', 'MAIN', 'DESSERT', 'BEVERAGE'];
+    const allowedStatuses = ['ACTIVE', 'INACTIVE', 'SOLD_OUT'];
 
-    if (category && !allowedCategories.includes(category)) {
-        return res.status(400).json({ success: false, message: `Invalid category. Allowed: ${allowedCategories.join(', ')}` });
-    }
+    const data = {};
 
-    if (status && !allowedStatuses.includes(status)) {
-        return res.status(400).json({ success: false, message: `Invalid status. Allowed: ${allowedStatuses.join(', ')}` });
-    }
-
-    const fields = [];
-    const values = [];
-    let index = 1;
-
-    if (name !== undefined) {
-        fields.push(`name = $${index++}`);
-        values.push(name);
-    }
-    if (description !== undefined) {
-        fields.push(`description = $${index++}`);
-        values.push(description);
-    }
-    if (price !== undefined) {
-        fields.push(`price = $${index++}`);
-        values.push(price);
-    }
+    if (name !== undefined) data.name = name;
+    if (description !== undefined) data.description = description;
+    if (price !== undefined) data.price = parseFloat(price);
+    
     if (category !== undefined) {
-        fields.push(`category = $${index++}`);
-        values.push(category);
-    }
-    if (status !== undefined) {
-        fields.push(`status = $${index++}`);
-        values.push(status);
+        const uppercaseCategory = category.toUpperCase();
+        if (!allowedCategories.includes(uppercaseCategory)) {
+            return res.status(400).json({ success: false, message: `Invalid category. Allowed: ${allowedCategories.join(', ')}` });
+        }
+        data.category = uppercaseCategory;
     }
 
-    if (fields.length === 0) {
+    if (status !== undefined) {
+        const uppercaseStatus = status.toUpperCase();
+        if (!allowedStatuses.includes(uppercaseStatus)) {
+            return res.status(400).json({ success: false, message: `Invalid status. Allowed: ${allowedStatuses.join(', ')}` });
+        }
+        data.status = uppercaseStatus;
+    }
+
+    if (Object.keys(data).length === 0) {
         return res.status(400).json({ success: false, message: 'No fields to update.' });
     }
 
-    values.push(id);
-
     try {
-        const updateResult = await pool.query(
-            `UPDATE menu_items SET ${fields.join(', ')} WHERE menu_item_id = $${index} RETURNING *`,
-            values
-        );
+        const menuItem = await prisma.menuItem.update({
+            where: { id: parseInt(id) },
+            data
+        });
 
-        if (updateResult.rows.length === 0) {
+        res.json({ success: true, menuItem });
+    } catch (error) {
+        if (error.code === 'P2025') {
             return res.status(404).json({ success: false, message: 'Menu item not found.' });
         }
-
-        res.json({ success: true, menuItem: updateResult.rows[0] });
-    } catch (error) {
         console.error('Error updating menu item:', error);
         res.status(500).json({ success: false, message: 'Server Error: Failed to update menu item' });
     }
@@ -115,17 +112,16 @@ exports.updateMenuItem = async (req, res) => {
 exports.deleteMenuItem = async (req, res) => {
     const { id } = req.params;
     try {
-        const updateResult = await pool.query(
-            "UPDATE menu_items SET status = 'inactive' WHERE menu_item_id = $1 RETURNING *",
-            [id]
-        );
+        const menuItem = await prisma.menuItem.update({
+            where: { id: parseInt(id) },
+            data: { status: 'INACTIVE' }
+        });
 
-        if (updateResult.rows.length === 0) {
+        res.json({ success: true, message: 'Menu item marked inactive.', menuItem });
+    } catch (error) {
+        if (error.code === 'P2025') {
             return res.status(404).json({ success: false, message: 'Menu item not found.' });
         }
-
-        res.json({ success: true, message: 'Menu item marked inactive.', menuItem: updateResult.rows[0] });
-    } catch (error) {
         console.error('Error deleting menu item:', error);
         res.status(500).json({ success: false, message: 'Server Error: Failed to delete menu item' });
     }

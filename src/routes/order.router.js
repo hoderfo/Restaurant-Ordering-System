@@ -8,9 +8,9 @@ const { requireRole, ROLES } = require('../middleware/rbac');
 router.use(authenticateToken);
 
 // Floor plan endpoints
-router.post('/', requireRole(['floor', 'admin', 'management']), orderController.getOrCreateOrder);
-router.get('/table/:tableId', requireRole(['floor', 'admin', 'management']), orderController.getTableOrderItems);
-router.post('/:orderId/items', requireRole(['floor', 'admin', 'management']), orderController.addItemToOrder);
+router.post('/', requireRole(ROLES.FLOOR_AND_MANAGEMENT), orderController.getOrCreateOrder);
+router.get('/table/:tableId', requireRole(ROLES.FLOOR_AND_MANAGEMENT), orderController.getTableOrderItems);
+router.post('/:orderId/items', requireRole(ROLES.FLOOR_AND_MANAGEMENT), orderController.addItemToOrder);
 
 // Billing endpoints
 router.post('/:orderId/checkout', requireRole(ROLES.FLOOR_AND_MANAGEMENT), orderController.checkoutOrder);
@@ -18,7 +18,7 @@ router.get('/:orderId/bill', requireRole(ROLES.FLOOR_AND_MANAGEMENT), orderContr
 
 // Kitchen endpoints
 // Allow 'kitchen', 'admin', 'management' to access kitchen routes
-router.get('/kitchen', requireRole(['kitchen', 'admin', 'management']), orderController.getKitchenOrdersSafe);
-router.put('/items/:itemId/status', requireRole(['kitchen', 'admin', 'management']), orderController.updateOrderItemStatus);
+router.get('/kitchen', requireRole(ROLES.KITCHEN_AND_MANAGEMENT), orderController.getKitchenOrders);
+router.put('/items/:itemId/status', requireRole(ROLES.KITCHEN_AND_MANAGEMENT), orderController.updateOrderItemStatus);
 
 module.exports = router;

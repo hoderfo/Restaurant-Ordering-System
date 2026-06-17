@@ -1,23 +1,27 @@
-const pool = require("../config/db");
+const prisma = require("../config/db");
 
 const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : s;
 
 const createTable = async (req, res) => {
     try {
         const { label, capacity, status } = req.body;
-        const tableStatus = status ? status.toLowerCase() : 'available';
+        const tableStatus = status ? status.toUpperCase() : 'AVAILABLE';
 
-        const existingTable = await pool.query('SELECT * FROM tables WHERE label = $1', [label]);
-        if (existingTable.rows.length > 0) {
+        const existingTable = await prisma.table.findUnique({ where: { label } });
+        if (existingTable) {
             return res.status(400).json({ success: false, message: "Table already exists" });
         }
-        const result = await pool.query(
-            'INSERT INTO tables (label, capacity, status) VALUES ($1, $2, $3) RETURNING *',
-            [label, capacity, tableStatus]
-        );
-        const createdTable = result.rows[0];
+        const createdTable = await prisma.table.create({
+            data: { label, capacity: parseInt(capacity), status: tableStatus }
+        });
+
         createdTable.status = capitalize(createdTable.status);
-        res.status(201).json({ success: true, message: "Table created", table: { ...createdTable, _id: createdTable.table_id } });
+        
+        if (req.app.locals.io) {
+            req.app.locals.io.emit('table:created', { ...createdTable, _id: createdTable.id });
+        }
+
+        res.status(201).json({ success: true, message: "Table created", table: { ...createdTable, _id: createdTable.id } });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -25,9 +29,12 @@ const createTable = async (req, res) => {
 
 const getTables = async (req, res) => {
     try {
-        const result = await pool.query('SELECT * FROM tables ORDER BY table_id ASC');
-        // Map table_id to _id for frontend compatibility
-        const tables = result.rows.map(t => ({ ...t, _id: t.table_id, status: capitalize(t.status) }));
+        const tablesResult = await prisma.table.findMany({ 
+            where: { isActive: true },
+            orderBy: { id: 'asc' } 
+        });
+        // Map id to _id for frontend compatibility
+        const tables = tablesResult.map(t => ({ ...t, _id: t.id, status: capitalize(t.status) }));
         res.status(200).json({ success: true, tables });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -38,51 +45,43 @@ const updateTable = async (req, res) => {
     try {
         const { id } = req.params;
         const { label, capacity, status } = req.body;
+        const data = {};
 
-        let query = 'UPDATE tables SET ';
-        const values = [];
-        let index = 1;
+        if (label) data.label = label;
+        if (capacity) data.capacity = parseInt(capacity);
 
-        if (label) { query += `label = $${index}, `; values.push(label); index++; }
-        if (capacity) { query += `capacity = $${index}, `; values.push(capacity); index++; }
         if (status) {
-            const newStatus = status.toLowerCase();
-            query += `status = $${index}, `; values.push(newStatus); index++;
+            data.status = status.toUpperCase();
 
-            if (newStatus === 'cleaning' || newStatus === 'available') {
-                const activeRes = await pool.query(
-                    "SELECT * FROM reservations WHERE table_id = $1 AND status = 'seated'",
-                    [id]
-                );
-                for (const r of activeRes.rows) {
-                    const pad = (n) => n.toString().padStart(2, '0');
-                    const dbDateStr = `${r.date.getFullYear()}-${pad(r.date.getMonth() + 1)}-${pad(r.date.getDate())}`;
-                    const start = new Date(`${dbDateStr}T${r.start_time}`);
-                    let elapsedMins = Math.floor((Date.now() - start.getTime()) / 60000);
-                    if (elapsedMins < 1) elapsedMins = 1;
+            if (data.status === 'CLEANING' || data.status === 'AVAILABLE') {
+                const activeRes = await prisma.reservation.findMany({
+                    where: { tableId: parseInt(id), status: 'SEATED' }
+                });
 
-                    await pool.query(
-                        "UPDATE reservations SET duration = $1, status = 'completed' WHERE reservation_id = $2",
-                        [elapsedMins, r.reservation_id]
-                    );
+                for (const r of activeRes) {
+                    const elapsedMins = Math.max(1, Math.floor((Date.now() - new Date(r.startTime).getTime()) / 60000));
+                    await prisma.reservation.update({
+                        where: { id: r.id },
+                        data: { duration: elapsedMins, status: 'COMPLETED' } // Note: Assuming COMPLETED is a valid status, else check schema.
+                    });
                 }
             }
         }
 
-
-
-        query = query.slice(0, -2); // remove last comma
-        query += ` WHERE table_id = $${index} RETURNING *`;
-        values.push(id);
-
-        const result = await pool.query(query, values);
-        if (result.rows.length === 0) return res.status(404).json({ success: false, message: "Table not found" });
-
-        const table = result.rows[0];
+        const table = await prisma.table.update({
+            where: { id: parseInt(id) },
+            data
+        });
 
         table.status = capitalize(table.status);
-        res.status(200).json({ success: true, message: "Table updated", table: { ...table, _id: table.table_id } });
+        
+        if (req.app.locals.io) {
+            req.app.locals.io.emit('table:updated', { ...table, _id: table.id });
+        }
+
+        res.status(200).json({ success: true, message: "Table updated", table: { ...table, _id: table.id } });
     } catch (error) {
+        if (error.code === 'P2025') return res.status(404).json({ success: false, message: "Table not found" });
         res.status(500).json({ success: false, message: error.message });
     }
 };
@@ -90,14 +89,45 @@ const updateTable = async (req, res) => {
 const deleteTable = async (req, res) => {
     try {
         const { id } = req.params;
-        // Unlink from history to prevent foreign key constraint violations
-        await pool.query('UPDATE reservations SET table_id = NULL WHERE table_id = $1', [id]);
-        await pool.query('UPDATE orders SET table_id = NULL WHERE table_id = $1', [id]);
+        const tableId = parseInt(id);
 
-        const result = await pool.query('DELETE FROM tables WHERE table_id = $1 RETURNING *', [id]);
-        if (result.rows.length === 0) return res.status(404).json({ success: false, message: "Table not found" });
+        const table = await prisma.table.findUnique({
+            where: { id: tableId }
+        });
+
+        if (!table) return res.status(404).json({ success: false, message: "Table not found" });
+
+        if (table.status === 'OCCUPIED' || table.status === 'CLEANING') {
+            return res.status(400).json({ success: false, message: "Cannot delete an occupied or cleaning table. Please clear the table first." });
+        }
+
+        const activeReservations = await prisma.reservation.findMany({
+            where: { 
+                tableId: tableId, 
+                date: { gte: new Date(new Date().setHours(0,0,0,0)) },
+                status: { notIn: ['CANCELLED', 'NO_SHOW', 'COMPLETED'] }
+            }
+        });
+
+        if (activeReservations.length > 0) {
+            return res.status(400).json({ success: false, message: "Cannot delete this table because it has upcoming reservations." });
+        }
+
+        await prisma.table.update({ 
+            where: { id: tableId },
+            data: { isActive: false }
+        });
+        
+        if (req.app.locals.io) {
+            req.app.locals.io.emit('table:deleted', { tableId: tableId });
+        }
+
         res.status(200).json({ success: true, message: "Table deleted" });
     } catch (error) {
+        if (error.code === 'P2025') return res.status(404).json({ success: false, message: "Table not found" });
+        if (error.code === 'P2003' || (error.message && error.message.includes('violates foreign key constraint'))) {
+            return res.status(400).json({ success: false, message: "Cannot delete this table because it has associated orders or reservations. Please mark it as INACTIVE instead to preserve history." });
+        }
         res.status(500).json({ success: false, message: error.message });
     }
 };

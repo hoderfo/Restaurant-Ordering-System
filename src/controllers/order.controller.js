@@ -1,22 +1,19 @@
-const pool = require('../config/db');
+const prisma = require('../config/db');
 
-// Create a new order or return existing active order for a table
 exports.getOrCreateOrder = async (req, res) => {
     const { tableId } = req.body;
     try {
-        // Check for active order
-        let result = await pool.query("SELECT * FROM orders WHERE table_id = $1 AND status = 'active'", [tableId]);
-        let order;
+        let order = await prisma.order.findFirst({
+            where: { tableId: parseInt(tableId), status: 'ACTIVE' }
+        });
 
-        if (result.rows.length > 0) {
-            order = result.rows[0];
-        } else {
-            // Create new order
-            const insertResult = await pool.query(
-                "INSERT INTO orders (table_id, status) VALUES ($1, 'active') RETURNING *",
-                [tableId]
-            );
-            order = insertResult.rows[0];
+        if (!order) {
+            order = await prisma.order.create({
+                data: {
+                    tableId: parseInt(tableId),
+                    status: 'ACTIVE'
+                }
+            });
         }
 
         res.json({ success: true, order });
@@ -26,129 +23,148 @@ exports.getOrCreateOrder = async (req, res) => {
     }
 };
 
-// Fetch order items for a specific table (useful for Floor Plan)
 exports.getTableOrderItems = async (req, res) => {
     const { tableId } = req.params;
     try {
-        const orderResult = await pool.query("SELECT order_id FROM orders WHERE table_id = $1 AND status = 'active'", [tableId]);
+        const order = await prisma.order.findFirst({
+            where: { tableId: parseInt(tableId), status: 'ACTIVE' },
+            select: { id: true }
+        });
 
-        if (orderResult.rows.length === 0) {
+        if (!order) {
             return res.json({ success: true, orderItems: [], message: 'No active order for this table' });
         }
 
-        const orderId = orderResult.rows[0].order_id;
+        const orderItems = await prisma.orderItem.findMany({
+            where: { orderId: order.id },
+            include: { menuItem: { select: { name: true } } },
+            orderBy: { id: 'asc' }
+        });
 
-        const itemsResult = await pool.query(`
-            SELECT oi.*, mi.name 
-            FROM order_items oi
-            JOIN menu_items mi ON oi.menu_item_id = mi.menu_item_id
-            WHERE oi.order_id = $1
-            ORDER BY oi.order_item_id ASC
-        `, [orderId]);
+        const formattedItems = orderItems.map(item => ({
+            ...item,
+            order_item_id: item.id, // for legacy frontend compatibility if needed
+            name: item.menuItem.name
+        }));
 
-        res.json({ success: true, orderItems: itemsResult.rows });
+        res.json({ success: true, orderItems: formattedItems });
     } catch (error) {
         console.error('Error fetching table order items:', error);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 };
 
-// Add item to order
 exports.addItemToOrder = async (req, res) => {
     const { orderId } = req.params;
     const { menuItemId, quantity, note } = req.body;
 
     try {
-        // Fetch price snapshot
-        const menuResult = await pool.query("SELECT price FROM menu_items WHERE menu_item_id = $1", [menuItemId]);
-        if (menuResult.rows.length === 0) {
+        const menuItem = await prisma.menuItem.findUnique({
+            where: { id: parseInt(menuItemId) },
+            select: { price: true }
+        });
+
+        if (!menuItem) {
             return res.status(404).json({ success: false, message: 'Menu item not found' });
         }
 
-        const unitPrice = menuResult.rows[0].price;
+        const orderItem = await prisma.orderItem.create({
+            data: {
+                orderId: parseInt(orderId),
+                menuItemId: parseInt(menuItemId),
+                quantity: quantity ? parseInt(quantity) : 1,
+                unitPrice: menuItem.price,
+                note: note || '',
+                status: 'PENDING'
+            },
+            include: {
+                menuItem: { select: { name: true } },
+                order: { include: { table: { select: { label: true } } } }
+            }
+        });
 
-        const insertResult = await pool.query(
-            "INSERT INTO order_items (order_id, menu_item_id, quantity, unit_price, note, status) VALUES ($1, $2, $3, $4, $5, 'pending') RETURNING *",
-            [orderId, menuItemId, quantity || 1, unitPrice, note || '']
-        );
+        if (req.app.locals.io) {
+            req.app.locals.io.emit('order:new_item', {
+                order_item_id: orderItem.id,
+                quantity: orderItem.quantity,
+                note: orderItem.note,
+                status: orderItem.status.toLowerCase(),
+                created_at: orderItem.createdAt,
+                menu_item_name: orderItem.menuItem.name,
+                table_label: orderItem.order.table.label
+            });
+        }
 
-        res.json({ success: true, orderItem: insertResult.rows[0] });
+        res.json({ success: true, orderItem });
     } catch (error) {
         console.error('Error adding item to order:', error);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 };
 
-// KDS: Fetch pending and in_preparation items
 exports.getKitchenOrders = async (req, res) => {
     try {
-        const result = await pool.query(`
-            SELECT 
-                oi.order_item_id, oi.quantity, oi.note, oi.status, oi.created_at,
-                mi.name AS menu_item_name,
-                t.label AS table_label
-            FROM order_items oi
-            JOIN menu_items mi ON oi.menu_item_id = mi.menu_item_id
-            JOIN orders o ON oi.order_id = o.order_id
-            JOIN tables t ON o.table_id = t.table_id
-            WHERE oi.status IN ('pending', 'in_preparation')
-            ORDER BY oi.created_at ASC
-        `);
+        const orderItems = await prisma.orderItem.findMany({
+            where: {
+                status: { in: ['PENDING', 'IN_PREPARATION'] }
+            },
+            include: {
+                menuItem: { select: { name: true } },
+                order: {
+                    include: { table: { select: { label: true } } }
+                }
+            },
+            orderBy: { createdAt: 'asc' }
+        });
 
-        res.json({ success: true, kitchenOrders: result.rows });
+        const formattedOrders = orderItems.map(oi => ({
+            order_item_id: oi.id,
+            quantity: oi.quantity,
+            note: oi.note,
+            status: oi.status.toLowerCase(),
+            created_at: oi.createdAt,
+            menu_item_name: oi.menuItem.name,
+            table_label: oi.order.table.label
+        }));
+
+        res.json({ success: true, kitchenOrders: formattedOrders });
     } catch (error) {
         console.error('Error fetching kitchen orders:', error);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 };
 
-// KDS: Fetch pending and in_preparation items (Fallback without created_at)
-exports.getKitchenOrdersSafe = async (req, res) => {
-    try {
-        const result = await pool.query(`
-            SELECT 
-                oi.order_item_id, oi.quantity, oi.note, oi.status,
-                mi.name AS menu_item_name,
-                t.label AS table_label,
-                o.created_at AS order_created_at
-            FROM order_items oi
-            JOIN menu_items mi ON oi.menu_item_id = mi.menu_item_id
-            JOIN orders o ON oi.order_id = o.order_id
-            JOIN tables t ON o.table_id = t.table_id
-            WHERE oi.status IN ('pending', 'in_preparation')
-            ORDER BY oi.order_item_id ASC
-        `);
+exports.getKitchenOrdersSafe = exports.getKitchenOrders;
 
-        res.json({ success: true, kitchenOrders: result.rows });
-    } catch (error) {
-        console.error('Error fetching kitchen orders:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-};
-
-// Kitchen update status
 exports.updateOrderItemStatus = async (req, res) => {
     const { itemId } = req.params;
     const { status } = req.body;
 
-    // Validate status
-    const validStatuses = ['pending', 'in_preparation', 'ready', 'served'];
-    if (!validStatuses.includes(status)) {
+    const validStatuses = ['PENDING', 'IN_PREPARATION', 'READY', 'SERVED'];
+    const uppercaseStatus = status ? status.toUpperCase() : '';
+
+    if (!validStatuses.includes(uppercaseStatus)) {
         return res.status(400).json({ success: false, message: 'Invalid status' });
     }
 
     try {
-        const updateResult = await pool.query(
-            "UPDATE order_items SET status = $1 WHERE order_item_id = $2 RETURNING *",
-            [status, itemId]
-        );
+        const orderItem = await prisma.orderItem.update({
+            where: { id: parseInt(itemId) },
+            data: { status: uppercaseStatus }
+        });
 
-        if (updateResult.rows.length === 0) {
-            return res.status(404).json({ success: false, message: 'Order item not found' });
+        if (req.app.locals.io) {
+            req.app.locals.io.emit('order:item_updated', {
+                order_item_id: orderItem.id,
+                status: orderItem.status
+            });
         }
 
-        res.json({ success: true, orderItem: updateResult.rows[0] });
+        res.json({ success: true, orderItem });
     } catch (error) {
+        if (error.code === 'P2025') {
+            return res.status(404).json({ success: false, message: 'Order item not found' });
+        }
         console.error('Error updating order item status:', error);
         res.status(500).json({ success: false, message: 'Server error' });
     }
@@ -157,60 +173,57 @@ exports.updateOrderItemStatus = async (req, res) => {
 exports.checkoutOrder = async (req, res) => {
     const { orderId } = req.params;
     const { paymentMethod, discountType, discountValue, discountReason } = req.body;
-    const validPaymentMethods = ['cash', 'card', 'ewallet'];
-    const validDiscountTypes = ['percentage', 'flat', null];
+    
+    const validPaymentMethods = ['CASH', 'CARD', 'EWALLET'];
+    const validDiscountTypes = ['PERCENTAGE', 'FLAT'];
+    const uppercasePaymentMethod = paymentMethod ? paymentMethod.toUpperCase() : null;
+    const uppercaseDiscountType = discountType ? discountType.toUpperCase() : null;
 
-    if (!paymentMethod || !validPaymentMethods.includes(paymentMethod)) {
+    if (!uppercasePaymentMethod || !validPaymentMethods.includes(uppercasePaymentMethod)) {
         return res.status(400).json({ success: false, message: 'Invalid or missing paymentMethod. Use cash, card, or ewallet.' });
     }
 
-    if (discountType && !validDiscountTypes.includes(discountType)) {
+    if (uppercaseDiscountType && !validDiscountTypes.includes(uppercaseDiscountType)) {
         return res.status(400).json({ success: false, message: 'Invalid discountType. Use percentage, flat, or omit it.' });
     }
 
     try {
-        const orderResult = await pool.query('SELECT * FROM orders WHERE order_id = $1', [orderId]);
-        if (orderResult.rows.length === 0) {
+        const order = await prisma.order.findUnique({
+            where: { id: parseInt(orderId) },
+            include: { items: true, bill: true }
+        });
+
+        if (!order) {
             return res.status(404).json({ success: false, message: 'Order not found.' });
         }
-
-        const order = orderResult.rows[0];
-        if (order.status !== 'active') {
+        if (order.status !== 'ACTIVE') {
             return res.status(400).json({ success: false, message: 'Only active orders can be checked out.' });
         }
-
-        const billExists = await pool.query('SELECT bill_id FROM bills WHERE order_id = $1', [orderId]);
-        if (billExists.rows.length > 0) {
+        if (order.bill) {
             return res.status(400).json({ success: false, message: 'Order already billed.' });
         }
-
-        const itemsResult = await pool.query(
-            'SELECT quantity, unit_price FROM order_items WHERE order_id = $1',
-            [orderId]
-        );
-
-        if (itemsResult.rows.length === 0) {
+        if (order.items.length === 0) {
             return res.status(400).json({ success: false, message: 'Cannot checkout an order without items.' });
         }
 
-        const subtotal = itemsResult.rows.reduce((sum, item) => sum + Number(item.unit_price) * item.quantity, 0);
+        const subtotal = order.items.reduce((sum, item) => sum + parseFloat(item.unitPrice) * item.quantity, 0);
         const taxRate = 10.0;
         const taxAmount = Number((subtotal * taxRate / 100).toFixed(2));
 
         let discount = 0;
         let normalizedDiscountValue = 0;
-        if (discountType && discountValue != null) {
+        if (uppercaseDiscountType && discountValue != null) {
             normalizedDiscountValue = Number(discountValue);
             if (Number.isNaN(normalizedDiscountValue) || normalizedDiscountValue < 0) {
                 return res.status(400).json({ success: false, message: 'Invalid discountValue.' });
             }
 
-            if (discountType === 'percentage') {
+            if (uppercaseDiscountType === 'PERCENTAGE') {
                 if (normalizedDiscountValue > 100) {
                     return res.status(400).json({ success: false, message: 'percentage discountValue cannot exceed 100.' });
                 }
                 discount = Number((subtotal * normalizedDiscountValue / 100).toFixed(2));
-            } else if (discountType === 'flat') {
+            } else if (uppercaseDiscountType === 'FLAT') {
                 discount = Number(normalizedDiscountValue.toFixed(2));
                 if (discount > subtotal + taxAmount) {
                     return res.status(400).json({ success: false, message: 'flat discountValue cannot exceed bill total.' });
@@ -219,23 +232,46 @@ exports.checkoutOrder = async (req, res) => {
         }
 
         const total = Number((subtotal + taxAmount - discount).toFixed(2));
+        const userId = req.user && (req.user.id || req.user.user_id) ? parseInt(req.user.id || req.user.user_id) : undefined;
 
-        const insertResult = await pool.query(
-            `INSERT INTO bills (
-                order_id, subtotal, tax_rate, tax_amount,
-                discount_type, discount_value, discount_amount, discount_reason,
-                total, payment_method, closed_at, closed_by
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), $11)
-            RETURNING *`,
-            [orderId, subtotal, taxRate, taxAmount, discountType || null, normalizedDiscountValue || null, discount, discountReason || null, total, paymentMethod, req.user.user_id]
-        );
+        const bill = await prisma.bill.create({
+            data: {
+                orderId: parseInt(orderId),
+                subtotal: subtotal,
+                taxRate: taxRate,
+                taxAmount: taxAmount,
+                discountType: uppercaseDiscountType,
+                discountValue: uppercaseDiscountType ? normalizedDiscountValue : null,
+                discountAmount: discount,
+                discountReason: discountReason || null,
+                total: total,
+                paymentMethod: uppercasePaymentMethod,
+                closedAt: new Date(),
+                closedById: userId
+            }
+        });
 
-        await pool.query(
-            "UPDATE orders SET status = 'billed', locked_at = NOW() WHERE order_id = $1",
-            [orderId]
-        );
+        await prisma.order.update({
+            where: { id: parseInt(orderId) },
+            data: { status: 'BILLED', lockedAt: new Date() }
+        });
 
-        res.status(201).json({ success: true, bill: insertResult.rows[0] });
+        // End the meal
+        const updatedTable = await prisma.table.update({
+            where: { id: order.tableId },
+            data: { status: 'CLEANING' }
+        });
+
+        await prisma.reservation.updateMany({
+            where: { tableId: order.tableId, status: 'SEATED' },
+            data: { status: 'COMPLETED' }
+        });
+
+        if (req.app.locals.io) {
+            req.app.locals.io.emit('table:updated', { ...updatedTable, _id: updatedTable.id, status: 'Cleaning' });
+        }
+
+        res.status(201).json({ success: true, bill });
     } catch (error) {
         console.error('Error checking out order:', error);
         res.status(500).json({ success: false, message: 'Server error' });
@@ -245,19 +281,21 @@ exports.checkoutOrder = async (req, res) => {
 exports.getBill = async (req, res) => {
     const { orderId } = req.params;
     try {
-        const result = await pool.query(
-            `SELECT b.*, o.status AS order_status
-             FROM bills b
-             JOIN orders o ON b.order_id = o.order_id
-             WHERE b.order_id = $1`,
-            [orderId]
-        );
+        const bill = await prisma.bill.findUnique({
+            where: { orderId: parseInt(orderId) },
+            include: { order: { select: { status: true } } }
+        });
 
-        if (result.rows.length === 0) {
+        if (!bill) {
             return res.status(404).json({ success: false, message: 'Bill not found.' });
         }
 
-        res.json({ success: true, bill: result.rows[0] });
+        const formattedBill = {
+            ...bill,
+            order_status: bill.order.status
+        };
+
+        res.json({ success: true, bill: formattedBill });
     } catch (error) {
         console.error('Error fetching bill:', error);
         res.status(500).json({ success: false, message: 'Server error' });
