@@ -1,6 +1,6 @@
 import { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
-import { ApiContext } from '../App';
+import { ApiContext, SocketContext } from '../App';
 import { X, Plus, CreditCard, ShoppingBag, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -11,6 +11,8 @@ const OrderManagementModal = ({ table, onClose }) => {
   const [order, setOrder] = useState(null);
   const [orderItems, setOrderItems] = useState([]);
   const [menuItems, setMenuItems] = useState([]);
+  
+  const socket = useContext(SocketContext);
   
   // Add item state
   const [selectedMenuItem, setSelectedMenuItem] = useState('');
@@ -61,6 +63,21 @@ const OrderManagementModal = ({ table, onClose }) => {
     initializeOrder();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [table]);
+
+  useEffect(() => {
+    if (socket) {
+      const handleItemUpdated = (data) => {
+        setOrderItems(prev => prev.map(item => 
+          (item.id === data.order_item_id || item.order_item_id === data.order_item_id)
+            ? { ...item, status: data.status }
+            : item
+        ));
+      };
+
+      socket.on('order:item_updated', handleItemUpdated);
+      return () => socket.off('order:item_updated', handleItemUpdated);
+    }
+  }, [socket]);
 
   const fetchOrderItems = async (orderId) => {
       try {
@@ -129,7 +146,7 @@ const OrderManagementModal = ({ table, onClose }) => {
 
   return (
     <div className="modal-overlay" style={{ zIndex: 1050 }}>
-      <div className="modal-content" style={{ maxWidth: '800px', width: '100%', display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}>
+      <div className="modal-content" style={{ maxWidth: '1000px', width: '100%', display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}>
         <div className="modal-header">
           <h2>Table {table.label} - Order Management</h2>
           <button type="button" onClick={onClose} className="btn-secondary" style={{ padding: '0.25rem' }}>

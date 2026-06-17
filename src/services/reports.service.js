@@ -245,12 +245,12 @@ class ReportsService {
     });
     doc.moveDown();
 
-    // Footer
     doc.fontSize(9).font('Helvetica').text(
       `Generated: ${new Date().toISOString()}`,
       { align: 'center', color: '#999999' }
     );
 
+    doc.end();
     return doc;
   }
 }

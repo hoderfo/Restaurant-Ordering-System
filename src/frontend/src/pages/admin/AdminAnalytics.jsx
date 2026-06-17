@@ -72,23 +72,23 @@ const AdminAnalytics = ({ user }) => {
         <h2>Reports & Logs</h2>
       </div>
 
-      {metrics && (
+      {metrics && metrics.metrics && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '15px', marginBottom: '30px' }}>
           <div className="glass-panel" style={{ padding: '15px' }}>
             <h4>Total Orders</h4>
-            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{metrics.totalOrders}</div>
+            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{metrics.metrics.order_count}</div>
           </div>
           <div className="glass-panel" style={{ padding: '15px' }}>
             <h4>Revenue</h4>
-            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#10B981' }}>${metrics.revenue.toFixed(2)}</div>
+            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#10B981' }}>${(metrics.metrics.total_revenue || 0).toFixed(2)}</div>
           </div>
           <div className="glass-panel" style={{ padding: '15px' }}>
-            <h4>Active Tables</h4>
-            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{metrics.activeTables}</div>
+            <h4>Active Orders</h4>
+            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{metrics.metrics.active_orders}</div>
           </div>
           <div className="glass-panel" style={{ padding: '15px' }}>
-            <h4>Pending Orders</h4>
-            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{metrics.pendingOrders}</div>
+            <h4>Avg Order Value</h4>
+            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>${(metrics.metrics.avg_order_value || 0).toFixed(2)}</div>
           </div>
         </div>
       )}

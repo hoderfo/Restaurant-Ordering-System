@@ -58,7 +58,7 @@ const TableDetailsModal = ({ table, reservations = [], onClose, displayStatus, o
 
   return (
     <div className="modal-overlay" style={{ zIndex: 1000 }}>
-      <div className="modal-content" style={{ maxWidth: '400px', width: '100%' }}>
+      <div className="modal-content" style={{ maxWidth: '600px', width: '100%' }}>
         <div className="modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <h2>Table {table.label}</h2>
@@ -143,31 +143,40 @@ const TableDetailsModal = ({ table, reservations = [], onClose, displayStatus, o
                     <div style={{ fontSize: '0.9rem' }}>
                       {res.bookedBy} ({res.guests} pax)
                     </div>
-                    {res.status?.toUpperCase() === 'PENDING' && (
-                      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-                        <button className="btn-primary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem', flex: 1 }} onClick={async () => {
-                          try {
-                            await axios.put(`${API_URL}/reservations/${res._id || res.id}/checkin`);
-                            toast.success('Guest checked in successfully');
-                            if (onActionSuccess) onActionSuccess();
-                          } catch (err) { toast.error(err.response?.data?.message || 'Check-in failed'); }
-                        }}>Check In</button>
-                        <button className="btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem', flex: 1 }} onClick={async () => {
-                          try {
-                            await axios.put(`${API_URL}/reservations/${res._id || res.id}/cancel`);
-                            toast.success('Reservation cancelled');
-                            if (onActionSuccess) onActionSuccess();
-                          } catch (err) { toast.error(err.response?.data?.message || 'Cancel failed'); }
-                        }}>Cancel</button>
-                        <button className="btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem', flex: 1 }} onClick={async () => {
-                          try {
-                            await axios.put(`${API_URL}/reservations/${res._id || res.id}/noshow`);
-                            toast.success('Marked as No-Show');
-                            if (onActionSuccess) onActionSuccess();
-                          } catch (err) { toast.error(err.response?.data?.message || 'No-show failed'); }
-                        }}>No-Show</button>
-                      </div>
-                    )}
+                    {res.status?.toUpperCase() === 'PENDING' && (() => {
+                      // Only show Check In and No Show if the exact start time has passed (no buffer)
+                      const isFuture = new Date(res.startTime) > new Date();
+                      
+                      return (
+                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                          {!isFuture && (
+                            <button className="btn-primary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem', flex: 1, backgroundColor: '#10B981', borderColor: '#10B981', color: 'white' }} onClick={async () => {
+                              try {
+                                await axios.put(`${API_URL}/reservations/${res._id || res.id}/checkin`);
+                                toast.success('Guest checked in successfully');
+                                if (onActionSuccess) onActionSuccess();
+                              } catch (err) { toast.error(err.response?.data?.message || 'Check-in failed'); }
+                            }}>Check In</button>
+                          )}
+                          <button className="btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem', flex: 1, backgroundColor: '#EF4444', borderColor: '#EF4444', color: 'white' }} onClick={async () => {
+                            try {
+                              await axios.put(`${API_URL}/reservations/${res._id || res.id}/cancel`);
+                              toast.success('Reservation cancelled');
+                              if (onActionSuccess) onActionSuccess();
+                            } catch (err) { toast.error(err.response?.data?.message || 'Cancel failed'); }
+                          }}>Cancel</button>
+                          {!isFuture && (
+                            <button className="btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem', flex: 1, backgroundColor: '#6B7280', borderColor: '#6B7280', color: 'white' }} onClick={async () => {
+                              try {
+                                await axios.put(`${API_URL}/reservations/${res._id || res.id}/noshow`);
+                                toast.success('Marked as No-Show');
+                                if (onActionSuccess) onActionSuccess();
+                              } catch (err) { toast.error(err.response?.data?.message || 'No-show failed'); }
+                            }}>No-Show</button>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </li>
                 ))}
               </ul>
@@ -175,15 +184,6 @@ const TableDetailsModal = ({ table, reservations = [], onClose, displayStatus, o
           )}
 
 
-
-          <button
-            className="btn-secondary"
-            style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', alignItems: 'center', color: '#EF4444', borderColor: '#EF4444' }}
-            onClick={handleDelete}
-            disabled={loading}
-          >
-            <Trash2 size={18} /> Delete Table
-          </button>
 
         </div>
       </div>

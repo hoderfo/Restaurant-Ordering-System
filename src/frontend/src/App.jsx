@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { Routes, Route, Link, useNavigate } from 'react-router-dom';
 import io from 'socket.io-client';
 import axios from 'axios';
 import { ChefHat, LayoutGrid } from 'lucide-react';
@@ -29,10 +29,25 @@ if (savedToken) {
   axios.defaults.headers.common['Authorization'] = `Bearer ${savedToken}`;
 }
 
+const ProtectedRoute = ({ user, children }) => {
+  if (!user) {
+    return (
+      <div style={{ textAlign: 'center', padding: '4rem 2rem' }}>
+        <h2>Welcome to Tasty Station</h2>
+        <p style={{ color: 'var(--text-muted)', marginTop: '1rem', fontSize: '1.1rem' }}>
+          Please click "Staff Login" to access your workspace.
+        </p>
+      </div>
+    );
+  }
+  return children;
+};
+
 function App() {
   const [socket, setSocket] = useState(null);
   const [user, setUser] = useState(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const savedToken = localStorage.getItem('token');
@@ -66,12 +81,12 @@ function App() {
     if (socket) {
       socket.disconnect();
     }
+    navigate('/');
   };
 
   return (
     <SocketContext.Provider value={socket}>
       <ApiContext.Provider value={API_URL}>
-        <Router>
           <div className="app-container">
             <Toaster
               position="top-right"
@@ -103,10 +118,10 @@ function App() {
 
             <main className="main-content">
               <Routes>
-                <Route path="/" element={<FloorPlan user={user} />} />
-                <Route path="/kitchen" element={<KitchenView user={user} />} />
-                <Route path="/menu" element={<MenuManagement user={user} />} />
-                <Route path="/admin" element={<AdminLayout user={user} />}>
+                <Route path="/" element={<ProtectedRoute user={user}><FloorPlan user={user} /></ProtectedRoute>} />
+                <Route path="/kitchen" element={<ProtectedRoute user={user}><KitchenView user={user} /></ProtectedRoute>} />
+                <Route path="/menu" element={<ProtectedRoute user={user}><MenuManagement user={user} /></ProtectedRoute>} />
+                <Route path="/admin" element={<ProtectedRoute user={user}><AdminLayout user={user} /></ProtectedRoute>}>
                   <Route index element={<AdminDashboard />} />
                   <Route path="users" element={<AdminUsers />} />
                   <Route path="menu" element={<MenuManagement user={user} />} />
@@ -132,11 +147,19 @@ function App() {
                   }
 
                   setAuthModalOpen(false);
+
+                  // Role-based redirection
+                  if (userData.role === 'admin') {
+                    navigate('/admin');
+                  } else if (userData.role === 'kitchen') {
+                    navigate('/kitchen');
+                  } else if (userData.role === 'floor' || userData.role === 'management') {
+                    navigate('/');
+                  }
                 }}
               />
             )}
           </div>
-        </Router>
       </ApiContext.Provider>
     </SocketContext.Provider>
   );

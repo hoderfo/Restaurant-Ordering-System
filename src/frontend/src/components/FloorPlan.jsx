@@ -128,6 +128,7 @@ const FloorPlan = ({ user }) => {
       socket.on('reservation:created', fetchReservations);
       socket.on('reservation:updated', fetchReservations);
       socket.on('reservation:deleted', fetchReservations);
+      socket.on('order:item_updated', handleOrderItemUpdated);
     }
 
     return () => {
@@ -138,10 +139,17 @@ const FloorPlan = ({ user }) => {
         socket.off('reservation:created', fetchReservations);
         socket.off('reservation:updated', fetchReservations);
         socket.off('reservation:deleted', fetchReservations);
+        socket.off('order:item_updated', handleOrderItemUpdated);
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket]);
+
+  const handleOrderItemUpdated = (data) => {
+    if (data.status === 'READY') {
+      toast.success(`🍽️ ${data.menu_item_name} is READY for Table ${data.table_label}!`, { duration: 5000 });
+    }
+  };
 
   const getNextTableNumber = () => {
     if (!tables || tables.length === 0) return 1;
@@ -163,11 +171,16 @@ const FloorPlan = ({ user }) => {
   };
 
   const computeTableDisplayStatus = (table) => {
-    let status = table.status;
+    const todayStr = new Date().toDateString();
+    const viewDateStr = new Date(viewDate).toDateString();
+    
+    // Real-time status (Occupied/Cleaning) only applies to today.
+    // For future/past dates, the physical table is considered 'Available' as a baseline.
+    let status = (viewDateStr === todayStr) ? table.status : 'Available';
 
     const activeRes = reservations.filter(r =>
       (r.tableId === table.id || r.tableId === table._id) &&
-      new Date(r.startTime).toDateString() === new Date(viewDate).toDateString() &&
+      new Date(r.startTime).toDateString() === viewDateStr &&
       !['CANCELLED', 'NO_SHOW', 'COMPLETED'].includes(r.status?.toUpperCase())
     );
 
@@ -265,9 +278,9 @@ const FloorPlan = ({ user }) => {
               <div className="form-group">
                 <label>Table label</label>
                 <input
-                  type="number"
+                  type="text"
                   className="form-input"
-                  placeholder="e.g. 9"
+                  placeholder="e.g. A1 or 9"
                   value={newLabel}
                   onChange={(e) => setNewLabel(e.target.value)}
                   required
