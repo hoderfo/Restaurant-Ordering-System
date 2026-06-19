@@ -216,16 +216,15 @@ const OrderManagementModal = ({ table, onClose }) => {
                         backgroundColor: 'white',
                         border: '1px solid #dcdde1',
                         borderRadius: '8px',
-                        padding: '1rem',
+                        padding: '0.8rem',
                         display: 'flex',
                         flexDirection: 'column',
                         alignItems: 'center',
-                        justifyContent: 'center',
+                        justifyContent: 'space-between',
                         textAlign: 'center',
                         cursor: 'pointer',
-                        aspectRatio: item.imageUrl ? 'auto' : '1',
-                        minHeight: '140px',
-                        userSelect: 'none'
+                        userSelect: 'none',
+                        height: '100%'
                       }}
                     >
                       {item.imageUrl && (
@@ -235,7 +234,7 @@ const OrderManagementModal = ({ table, onClose }) => {
                           style={{ width: '100%', height: '100px', objectFit: 'cover', borderRadius: '4px', marginBottom: '0.5rem' }} 
                         />
                       )}
-                      <div style={{ fontWeight: 'bold', marginBottom: '0.5rem', color: '#2f3640', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                      <div style={{ fontWeight: 'bold', fontSize: '0.9rem', marginBottom: '0.5rem', color: '#2f3640', width: '100%' }}>
                         {item.name}
                       </div>
                       <div style={{ color: '#10B981', fontWeight: 'bold', marginTop: 'auto' }}>
