@@ -95,11 +95,11 @@ const AdminSystem = () => {
             <tbody>
               {backups.map((backup, idx) => (
                 <tr key={idx}>
-                  <td>{new Date(backup.timestamp).toLocaleString()}</td>
+                  <td>{new Date(backup.createdAt).toLocaleString()}</td>
                   <td>{backup.filename}</td>
-                  <td>{Math.round(backup.sizeBytes / 1024)} KB</td>
-                  <td style={{ color: backup.status === 'success' ? '#10B981' : '#EF4444' }}>
-                    {backup.status.toUpperCase()}
+                  <td>{Math.round(backup.size / 1024)} KB</td>
+                  <td style={{ color: '#10B981' }}>
+                    SUCCESS
                   </td>
                 </tr>
               ))}

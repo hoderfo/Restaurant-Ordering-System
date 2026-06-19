@@ -134,7 +134,7 @@ exports.getKitchenOrders = async (req, res) => {
     }
 };
 
-exports.getKitchenOrdersSafe = exports.getKitchenOrders;
+
 
 exports.updateOrderItemStatus = async (req, res) => {
     const { itemId } = req.params;
@@ -213,7 +213,7 @@ exports.checkoutOrder = async (req, res) => {
         }
 
         const subtotal = order.items.reduce((sum, item) => sum + parseFloat(item.unitPrice) * item.quantity, 0);
-        const taxRate = 10.0;
+        const taxRate = process.env.TAX_RATE ? parseFloat(process.env.TAX_RATE) : 10.0;
         const taxAmount = Number((subtotal * taxRate / 100).toFixed(2));
 
         let discount = 0;

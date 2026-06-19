@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, useContext } from 'react';
 import axios from 'axios';
 import { X } from 'lucide-react';
+import { ApiContext } from '../App';
 
 const AuthModal = ({ onClose, onLogin }) => {
+  const API_URL = useContext(ApiContext);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -14,7 +16,7 @@ const AuthModal = ({ onClose, onLogin }) => {
     setLoading(true);
 
     try {
-      const response = await axios.post('http://localhost:3000/api/auth/login', {
+      const response = await axios.post(`${API_URL}/auth/login`, {
         username,
         password
       });

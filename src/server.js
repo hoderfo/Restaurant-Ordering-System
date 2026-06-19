@@ -31,7 +31,7 @@ const server = http.createServer(app);
 // Socket.io setup
 const io = new Server(server, {
   cors: {
-    origin: [process.env.FRONTEND_URL || 'http://localhost:3000', 'http://localhost:5173'],
+    origin: (origin, callback) => callback(null, true),
     methods: ['GET', 'POST'],
     credentials: true
   },
@@ -42,7 +42,9 @@ const io = new Server(server, {
 const PORT = process.env.PORT || 3000;
 
 // Security + Performance
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false,
+}));
 app.use(cors());
 app.use(compression());
 app.use(express.json({ limit: '10mb' }));
@@ -171,7 +173,7 @@ const scheduleDailyBackup = () => {
 
 server.listen(PORT, () => {
   console.log(`
-	HTTP Server: http://localhost:${PORT}
+	HTTP Server: http://0.0.0.0:${PORT} (Access via your local IP)
 	Environment: ${process.env.NODE_ENV}
   `);
 

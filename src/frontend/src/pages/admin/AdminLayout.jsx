@@ -46,6 +46,13 @@ const AdminLayout = ({ user }) => {
           <BarChart3 size={16} /> Reports & Logs
         </Link>
 
+        <Link 
+          to="/admin/system" 
+          className={`admin-nav-link ${isActive('/admin/system') ? 'active' : ''}`}
+        >
+          <ShieldCheck size={16} /> System
+        </Link>
+
       </aside>
       <main className="admin-content">
         <Outlet />

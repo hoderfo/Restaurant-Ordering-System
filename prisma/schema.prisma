@@ -13,6 +13,7 @@ model User {
   username  String   @unique
   password  String
   role      Role
+  isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
 
   auditLogs             AuditLog[]
