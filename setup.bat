@@ -28,8 +28,8 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-echo Running database migrations...
-call npx prisma migrate dev --skip-generate
+echo Syncing database schema...
+call npx prisma db push --accept-data-loss
 
 echo Seeding database...
 call node scripts/seed.js
