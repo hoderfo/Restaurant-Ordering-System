@@ -326,8 +326,24 @@ const OrderManagementModal = ({ table, onClose }) => {
                       <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                         {orderItems.map((item, index) => (
                           <li key={index} style={{ padding: '0.5rem', backgroundColor: '#f9fafb', borderRadius: '4px', border: '1px solid #e5e7eb', fontSize: '0.9rem' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <div style={{ fontWeight: 'bold', color: '#4b5563' }}>{item.quantity}x {item.name || item.menuItem?.name}</div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                                <div style={{ fontWeight: 'bold', color: '#4b5563' }}>{item.quantity}x {item.name || item.menuItem?.name}</div>
+                                {item.status && (
+                                  <span style={{ 
+                                    fontSize: '0.7rem', 
+                                    padding: '0.1rem 0.4rem', 
+                                    borderRadius: '10px', 
+                                    width: 'fit-content',
+                                    backgroundColor: item.status === 'PENDING' ? '#fef08a' : item.status === 'IN_PREPARATION' ? '#bfdbfe' : item.status === 'READY' ? '#bbf7d0' : '#e5e7eb',
+                                    color: item.status === 'PENDING' ? '#854d0e' : item.status === 'IN_PREPARATION' ? '#1e40af' : item.status === 'READY' ? '#166534' : '#374151',
+                                    fontWeight: 'bold',
+                                    textTransform: 'uppercase'
+                                  }}>
+                                    {item.status.replace('_', ' ')}
+                                  </span>
+                                )}
+                              </div>
                               <div style={{ color: '#4b5563' }}>${(parseFloat(item.unitPrice) * item.quantity).toFixed(2)}</div>
                             </div>
                             {item.note && <div style={{ fontSize: '0.8rem', color: '#6b7280', marginTop: '0.2rem' }}>Note: {item.note}</div>}
