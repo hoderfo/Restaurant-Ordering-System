@@ -20,7 +20,8 @@ const MenuManagement = ({ user }) => {
     description: '',
     price: '',
     category: 'MAIN',
-    status: 'ACTIVE'
+    status: 'ACTIVE',
+    imageUrl: ''
   });
 
   const fetchMenuItems = async () => {
@@ -51,7 +52,8 @@ const MenuManagement = ({ user }) => {
         description: item.description || '',
         price: item.price,
         category: item.category,
-        status: item.status
+        status: item.status,
+        imageUrl: item.imageUrl || ''
       });
     } else {
       setEditingItem(null);
@@ -60,7 +62,8 @@ const MenuManagement = ({ user }) => {
         description: '',
         price: '',
         category: 'MAIN',
-        status: 'ACTIVE'
+        status: 'ACTIVE',
+        imageUrl: ''
       });
     }
     setIsModalOpen(true);
@@ -142,6 +145,13 @@ const MenuManagement = ({ user }) => {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.5rem' }}>
                   {groupedItems[category].map(item => (
                     <div key={item.id} className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', opacity: item.status === 'SOLD_OUT' ? 0.7 : 1 }}>
+                      {item.imageUrl && (
+                        <img 
+                          src={item.imageUrl} 
+                          alt={item.name} 
+                          style={{ width: '100%', height: '150px', objectFit: 'cover', borderRadius: '8px', marginBottom: '0.5rem' }} 
+                        />
+                      )}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <h4 style={{ margin: 0, fontSize: '1.2rem', color: item.status === 'SOLD_OUT' ? 'var(--text-muted)' : 'var(--text-color)' }}>{item.name}</h4>
                         <span style={{ fontWeight: 'bold', color: 'var(--primary-color)' }}>${Number(item.price).toFixed(2)}</span>
@@ -212,6 +222,17 @@ const MenuManagement = ({ user }) => {
                   rows="3"
                   value={formData.description}
                   onChange={(e) => setFormData({...formData, description: e.target.value})}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label>Image URL (Optional)</label>
+                <input 
+                  type="url" 
+                  className="form-input" 
+                  placeholder="https://example.com/image.jpg"
+                  value={formData.imageUrl}
+                  onChange={(e) => setFormData({...formData, imageUrl: e.target.value})}
                 />
               </div>
 

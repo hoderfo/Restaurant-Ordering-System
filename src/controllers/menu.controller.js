@@ -23,7 +23,7 @@ exports.getMenuItems = async (req, res) => {
 };
 
 exports.createMenuItem = async (req, res) => {
-    const { name, description, price, category, status } = req.body;
+    const { name, description, price, category, status, imageUrl } = req.body;
 
     if (!name || price == null || !category) {
         return res.status(400).json({ success: false, message: 'name, price and category are required.' });
@@ -49,7 +49,8 @@ exports.createMenuItem = async (req, res) => {
                 description: description || '',
                 price: parseFloat(price),
                 category: uppercaseCategory,
-                status: uppercaseStatus
+                status: uppercaseStatus,
+                imageUrl: imageUrl || null
             }
         });
 
@@ -62,7 +63,7 @@ exports.createMenuItem = async (req, res) => {
 
 exports.updateMenuItem = async (req, res) => {
     const { id } = req.params;
-    const { name, description, price, category, status } = req.body;
+    const { name, description, price, category, status, imageUrl } = req.body;
 
     const allowedCategories = ['STARTER', 'MAIN', 'DESSERT', 'BEVERAGE'];
     const allowedStatuses = ['ACTIVE', 'INACTIVE', 'SOLD_OUT'];
@@ -72,6 +73,7 @@ exports.updateMenuItem = async (req, res) => {
     if (name !== undefined) data.name = name;
     if (description !== undefined) data.description = description;
     if (price !== undefined) data.price = parseFloat(price);
+    if (imageUrl !== undefined) data.imageUrl = imageUrl;
     
     if (category !== undefined) {
         const uppercaseCategory = category.toUpperCase();

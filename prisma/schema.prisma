@@ -124,6 +124,7 @@ model MenuItem {
   price       Decimal        @db.Decimal(10, 2)
   category    MenuCategory
   status      MenuItemStatus @default(ACTIVE)
+  imageUrl    String?
   createdAt   DateTime       @default(now())
 
   orderItems OrderItem[]

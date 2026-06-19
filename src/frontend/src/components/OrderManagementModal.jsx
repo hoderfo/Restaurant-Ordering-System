@@ -223,14 +223,22 @@ const OrderManagementModal = ({ table, onClose }) => {
                         justifyContent: 'center',
                         textAlign: 'center',
                         cursor: 'pointer',
-                        aspectRatio: '1',
+                        aspectRatio: item.imageUrl ? 'auto' : '1',
+                        minHeight: '140px',
                         userSelect: 'none'
                       }}
                     >
+                      {item.imageUrl && (
+                        <img 
+                          src={item.imageUrl} 
+                          alt={item.name} 
+                          style={{ width: '100%', height: '100px', objectFit: 'cover', borderRadius: '4px', marginBottom: '0.5rem' }} 
+                        />
+                      )}
                       <div style={{ fontWeight: 'bold', marginBottom: '0.5rem', color: '#2f3640', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                         {item.name}
                       </div>
-                      <div style={{ color: '#10B981', fontWeight: 'bold' }}>
+                      <div style={{ color: '#10B981', fontWeight: 'bold', marginTop: 'auto' }}>
                         ${Number(item.price).toFixed(2)}
                       </div>
                     </div>
