@@ -14,6 +14,7 @@ const menuRoutes = require('./routes/menu.router');
 const orderRoutes = require('./routes/order.router');
 const reservationRoutes = require('./routes/reservation.router');
 const adminRoutes = require('./routes/admin.router');
+const settingsRoutes = require('./routes/settings.router');
 
 // Middleware
 const { authenticateToken } = require('./middleware/auth');
@@ -66,6 +67,7 @@ app.use('/api/reservations', reservationRoutes);
 app.use('/api/analytics', authenticateToken, analyticsRoutes);
 app.use('/api/reports', authenticateToken, analyticsRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // WebSocket
 setupWebSocketHandlers(io);

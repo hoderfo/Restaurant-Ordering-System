@@ -213,7 +213,23 @@ exports.checkoutOrder = async (req, res) => {
         }
 
         const subtotal = order.items.reduce((sum, item) => sum + parseFloat(item.unitPrice) * item.quantity, 0);
-        const taxRate = process.env.TAX_RATE ? parseFloat(process.env.TAX_RATE) : 10.0;
+        
+        let taxRate = 10.0;
+        try {
+            let taxSetting;
+            try {
+                taxSetting = await prisma.setting.findUnique({ where: { key: 'TAX_RATE' } });
+            } catch (e) {
+                const results = await prisma.$queryRaw`SELECT * FROM settings WHERE key = 'TAX_RATE'`;
+                taxSetting = results[0];
+            }
+            if (taxSetting && taxSetting.value) {
+                taxRate = parseFloat(taxSetting.value);
+            }
+        } catch (e) {
+            console.error('Failed to fetch TAX_RATE setting, falling back to 10.0');
+        }
+
         const taxAmount = Number((subtotal * taxRate / 100).toFixed(2));
 
         let discount = 0;

@@ -3,6 +3,7 @@ const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
 const { requireRole, ROLES } = require('../middleware/rbac');
 const adminController = require('../controllers/admin.controller');
+const settingController = require('../controllers/setting.controller');
 
 router.use(authenticateToken, requireRole(ROLES.ADMIN));
 
@@ -114,5 +115,9 @@ router.get('/reservations', adminController.getReservations);
  * Get all orders (kitchen view for admin)
  */
 router.get('/orders', adminController.getOrders);
+
+// Settings management
+router.get('/settings', requireRole(ROLES.ADMIN), settingController.getSettings);
+router.put('/settings', requireRole(ROLES.ADMIN), settingController.updateSetting);
 
 module.exports = router;

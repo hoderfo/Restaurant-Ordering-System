@@ -17,6 +17,7 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminUsers from './pages/admin/AdminUsers';
 import AdminAnalytics from './pages/admin/AdminAnalytics';
 import AdminSystem from './pages/admin/AdminSystem';
+import AdminSettings from './pages/admin/AdminSettings';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || window.location.origin;
 const API_URL = import.meta.env.VITE_API_URL || `${window.location.origin}/api`;
@@ -47,9 +48,20 @@ function App() {
   const [socket, setSocket] = useState(null);
   const [user, setUser] = useState(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [restaurantName, setRestaurantName] = useState('Tasty Station');
   const navigate = useNavigate();
 
   useEffect(() => {
+    // Fetch Public Settings
+    axios.get(`${API_URL}/settings/public`).then(res => {
+      if (res.data.success) {
+        const { RESTAURANT_NAME, PRIMARY_COLOR, SECONDARY_COLOR } = res.data.settings;
+        if (RESTAURANT_NAME) setRestaurantName(RESTAURANT_NAME);
+        if (PRIMARY_COLOR) document.documentElement.style.setProperty('--primary', PRIMARY_COLOR);
+        if (SECONDARY_COLOR) document.documentElement.style.setProperty('--secondary', SECONDARY_COLOR);
+      }
+    }).catch(err => console.error("Failed to fetch public settings", err));
+
     const savedToken = localStorage.getItem('token');
 
     const newSocket = io(SOCKET_URL, {
@@ -101,7 +113,7 @@ function App() {
           />
           <header className="app-header">
             <div className="logo-container">
-              <h1>Tasty Station</h1>
+              <h1>{restaurantName}</h1>
             </div>
             <nav className="main-nav">
               <Link to="/" className="nav-link"><LayoutGrid size={18} /> Floor Plan</Link>
@@ -135,6 +147,7 @@ function App() {
                 <Route path="tables" element={<FloorPlan user={user} />} />
                 <Route path="analytics" element={<AdminAnalytics user={user} />} />
                 <Route path="system" element={<AdminSystem />} />
+                <Route path="settings" element={<AdminSettings />} />
               </Route>
             </Routes>
           </main>

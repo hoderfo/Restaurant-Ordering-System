@@ -53,6 +53,13 @@ const AdminLayout = ({ user }) => {
           <ShieldCheck size={16} /> System
         </Link>
 
+        <Link 
+          to="/admin/settings" 
+          className={`admin-nav-link ${isActive('/admin/settings') ? 'active' : ''}`}
+        >
+          <MenuSquare size={16} /> Settings
+        </Link>
+
       </aside>
       <main className="admin-content">
         <Outlet />
