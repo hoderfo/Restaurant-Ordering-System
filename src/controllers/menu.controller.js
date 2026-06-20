@@ -29,7 +29,10 @@ exports.createMenuItem = async (req, res) => {
         return res.status(400).json({ success: false, message: 'name, price and category are required.' });
     }
 
-    const allowedCategories = ['STARTER', 'MAIN', 'DESSERT', 'BEVERAGE'];
+    const categorySetting = await prisma.setting.findUnique({ where: { key: 'MENU_CATEGORIES' }});
+    const allowedCategoriesStr = categorySetting ? categorySetting.value : 'STARTER,MAIN,DESSERT,BEVERAGE';
+    const allowedCategories = allowedCategoriesStr.split(',').map(c => c.trim().toUpperCase());
+    
     const allowedStatuses = ['ACTIVE', 'INACTIVE', 'SOLD_OUT'];
     const uppercaseCategory = category.toUpperCase();
     const uppercaseStatus = status ? status.toUpperCase() : 'ACTIVE';
@@ -65,7 +68,6 @@ exports.updateMenuItem = async (req, res) => {
     const { id } = req.params;
     const { name, description, price, category, status, imageUrl } = req.body;
 
-    const allowedCategories = ['STARTER', 'MAIN', 'DESSERT', 'BEVERAGE'];
     const allowedStatuses = ['ACTIVE', 'INACTIVE', 'SOLD_OUT'];
 
     const data = {};
@@ -76,6 +78,10 @@ exports.updateMenuItem = async (req, res) => {
     if (imageUrl !== undefined) data.imageUrl = imageUrl;
     
     if (category !== undefined) {
+        const categorySetting = await prisma.setting.findUnique({ where: { key: 'MENU_CATEGORIES' }});
+        const allowedCategoriesStr = categorySetting ? categorySetting.value : 'STARTER,MAIN,DESSERT,BEVERAGE';
+        const allowedCategories = allowedCategoriesStr.split(',').map(c => c.trim().toUpperCase());
+        
         const uppercaseCategory = category.toUpperCase();
         if (!allowedCategories.includes(uppercaseCategory)) {
             return res.status(400).json({ success: false, message: `Invalid category. Allowed: ${allowedCategories.join(', ')}` });

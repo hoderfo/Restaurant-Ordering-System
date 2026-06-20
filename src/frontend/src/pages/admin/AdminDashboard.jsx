@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
-import { ApiContext } from '../../App';
+import { ApiContext, SettingsContext } from '../../App';
 
 const AdminDashboard = () => {
   const API_URL = useContext(ApiContext);
+  const globalSettings = useContext(SettingsContext) || {};
+  const currency = globalSettings.CURRENCY_SYMBOL || '$';
   const [data, setData] = useState({ dashboard: null, activity: null });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -61,7 +63,7 @@ const AdminDashboard = () => {
         </div>
         <div className="stat-card">
           <div className="stat-title">Today's Revenue</div>
-          <div className="stat-value">${parseFloat(data.dashboard?.todayMetrics?.revenue || 0).toFixed(2)}</div>
+          <div className="stat-value">{currency}{parseFloat(data.dashboard?.todayMetrics?.revenue || 0).toFixed(2)}</div>
         </div>
       </div>
 

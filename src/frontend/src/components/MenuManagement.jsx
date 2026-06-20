@@ -1,14 +1,16 @@
 import { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
-import { ApiContext } from '../App';
+import { SettingsContext, ApiContext } from '../App';
 import { Plus, Edit2, Trash2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-const CATEGORIES = ['STARTER', 'MAIN', 'DESSERT', 'BEVERAGE'];
 const STATUSES = ['ACTIVE', 'SOLD_OUT', 'INACTIVE'];
 
 const MenuManagement = ({ user }) => {
   const API_URL = useContext(ApiContext);
+  const globalSettings = useContext(SettingsContext) || {};
+  const CATEGORIES = (globalSettings.MENU_CATEGORIES || 'STARTER,MAIN,DESSERT,BEVERAGE').split(',').map(c => c.trim().toUpperCase());
+  const currency = globalSettings.CURRENCY_SYMBOL || '$';
   const [menuItems, setMenuItems] = useState([]);
   const [loading, setLoading] = useState(true);
   
@@ -154,7 +156,7 @@ const MenuManagement = ({ user }) => {
                       )}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <h4 style={{ margin: 0, fontSize: '1.2rem', color: item.status === 'SOLD_OUT' ? 'var(--text-muted)' : 'var(--text-color)' }}>{item.name}</h4>
-                        <span style={{ fontWeight: 'bold', color: 'var(--primary-color)' }}>${Number(item.price).toFixed(2)}</span>
+                        <span style={{ fontWeight: 'bold', color: 'var(--primary-color)' }}>{currency}{Number(item.price).toFixed(2)}</span>
                       </div>
                       
                       <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', flex: 1 }}>{item.description || 'No description'}</p>
@@ -238,7 +240,7 @@ const MenuManagement = ({ user }) => {
 
               <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
                 <div className="form-group" style={{ flex: 1 }}>
-                  <label>Price ($)</label>
+                  <label>Price ({currency})</label>
                   <input 
                     type="number" 
                     step="0.01" 

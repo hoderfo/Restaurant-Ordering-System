@@ -74,7 +74,12 @@ const createReservation = async (req, res) => {
         const { bookedBy, contact, date, tableId, overrideWarningConfirmed, notes } = req.body;
 
         const guests = parseInt(req.body.guests, 10) || 1;
-        const duration = parseInt(req.body.duration, 10) || 90;
+        let duration = parseInt(req.body.duration, 10);
+        
+        if (isNaN(duration)) {
+            const durationSetting = await prisma.setting.findUnique({ where: { key: 'DEFAULT_RESERVATION_DURATION' }});
+            duration = durationSetting ? parseInt(durationSetting.value, 10) : 90;
+        }
 
         const startTime = new Date(date);
         const endTime = new Date(startTime.getTime() + (duration * 60000));

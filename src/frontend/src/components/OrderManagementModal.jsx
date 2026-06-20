@@ -1,12 +1,15 @@
 import { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
-import { ApiContext, SocketContext } from '../App';
+import { ApiContext, SocketContext, SettingsContext } from '../App';
 import { X, CreditCard, Check, Minus, Plus, Send } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const OrderManagementModal = ({ table, onClose }) => {
   const API_URL = useContext(ApiContext);
   const socket = useContext(SocketContext);
+  const globalSettings = useContext(SettingsContext) || {};
+  const currency = globalSettings.CURRENCY_SYMBOL || '$';
+  const PAYMENT_METHODS = (globalSettings.PAYMENT_METHODS || 'CASH,CARD,EWALLET').split(',').map(m => m.trim().toUpperCase());
 
   const [loading, setLoading] = useState(true);
   const [order, setOrder] = useState(null);
@@ -238,7 +241,7 @@ const OrderManagementModal = ({ table, onClose }) => {
                         {item.name}
                       </div>
                       <div style={{ color: '#10B981', fontWeight: 'bold', marginTop: 'auto' }}>
-                        ${Number(item.price).toFixed(2)}
+                        {currency}{Number(item.price).toFixed(2)}
                       </div>
                     </div>
                   ))}
@@ -257,16 +260,16 @@ const OrderManagementModal = ({ table, onClose }) => {
                   <h3>Order Paid</h3>
                 </div>
                 <div style={{ backgroundColor: 'var(--bg-color)', padding: '1rem', borderRadius: '8px', fontSize: '0.9rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}><span>Subtotal:</span> <span>${Number(bill.subtotal).toFixed(2)}</span></div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}><span>Tax:</span> <span>${Number(bill.taxAmount).toFixed(2)}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}><span>Subtotal:</span> <span>{currency}{Number(bill.subtotal).toFixed(2)}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}><span>Tax:</span> <span>{currency}{Number(bill.taxAmount).toFixed(2)}</span></div>
                   {Number(bill.discountAmount) > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', color: '#EF4444' }}>
-                      <span>Discount:</span> <span>-${Number(bill.discountAmount).toFixed(2)}</span>
+                      <span>Discount:</span> <span>-{currency}{Number(bill.discountAmount).toFixed(2)}</span>
                     </div>
                   )}
                   <hr style={{ margin: '0.5rem 0', borderColor: 'var(--surface-border)' }} />
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.2rem', fontWeight: 'bold' }}>
-                    <span>Total:</span> <span>${Number(bill.total).toFixed(2)}</span>
+                    <span>Total:</span> <span>{currency}{Number(bill.total).toFixed(2)}</span>
                   </div>
                   <div style={{ marginTop: '1rem', textAlign: 'center', color: 'var(--text-muted)' }}>
                     Paid via {bill.paymentMethod}
@@ -281,9 +284,9 @@ const OrderManagementModal = ({ table, onClose }) => {
                   <div className="form-group">
                     <label>Payment Method</label>
                     <select className="form-input" value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} required>
-                      <option value="CASH">Cash</option>
-                      <option value="CARD">Credit/Debit Card</option>
-                      <option value="EWALLET">E-Wallet</option>
+                      {PAYMENT_METHODS.map(method => (
+                        <option key={method} value={method}>{method}</option>
+                      ))}
                     </select>
                   </div>
                   <div className="form-group">
@@ -294,7 +297,7 @@ const OrderManagementModal = ({ table, onClose }) => {
                     }}>
                       <option value="">None</option>
                       <option value="PERCENTAGE">Percentage (%)</option>
-                      <option value="FLAT">Flat Amount ($)</option>
+                      <option value="FLAT">Flat Amount ({currency})</option>
                     </select>
                   </div>
                   {discountType && (
@@ -306,7 +309,7 @@ const OrderManagementModal = ({ table, onClose }) => {
 
                   <div style={{ marginTop: '2rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                     <button type="submit" className="btn-primary" style={{ backgroundColor: '#10B981', borderColor: '#10B981' }} disabled={checkoutLoading}>
-                      {checkoutLoading ? 'Processing...' : `Pay $${totalSubtotal.toFixed(2)} + Tax`}
+                      {checkoutLoading ? 'Processing...' : `Pay ${currency}${totalSubtotal.toFixed(2)} + Tax`}
                     </button>
                     <button type="button" className="btn-secondary" onClick={() => setIsCheckoutMode(false)} disabled={checkoutLoading}>
                       Back to Order
@@ -344,7 +347,7 @@ const OrderManagementModal = ({ table, onClose }) => {
                                   </span>
                                 )}
                               </div>
-                              <div style={{ color: '#4b5563' }}>${(parseFloat(item.unitPrice) * item.quantity).toFixed(2)}</div>
+                              <div style={{ color: '#4b5563' }}>{currency}{(parseFloat(item.unitPrice) * item.quantity).toFixed(2)}</div>
                             </div>
                             {item.note && <div style={{ fontSize: '0.8rem', color: '#6b7280', marginTop: '0.2rem' }}>Note: {item.note}</div>}
                           </li>
@@ -370,7 +373,7 @@ const OrderManagementModal = ({ table, onClose }) => {
                               </div>
 
                               <div style={{ fontWeight: 'bold', marginLeft: '1rem', width: '60px', textAlign: 'right' }}>
-                                ${(parseFloat(item.menuItem.price) * item.quantity).toFixed(2)}
+                                {currency}{(parseFloat(item.menuItem.price) * item.quantity).toFixed(2)}
                               </div>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -398,7 +401,7 @@ const OrderManagementModal = ({ table, onClose }) => {
                 <div style={{ paddingTop: '1rem', borderTop: '2px solid var(--surface-border)', marginTop: 'auto' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.2rem', fontWeight: 'bold', marginBottom: '1rem' }}>
                     <span>Subtotal:</span>
-                    <span>${totalSubtotal.toFixed(2)}</span>
+                    <span>{currency}{totalSubtotal.toFixed(2)}</span>
                   </div>
 
                   <div style={{ display: 'flex', gap: '0.5rem' }}>

@@ -68,11 +68,14 @@ exports.getPublicSettings = async (req, res) => {
         try {
             settings = await prisma.setting.findMany({
                 where: {
-                    key: { in: ['RESTAURANT_NAME', 'PRIMARY_COLOR', 'SECONDARY_COLOR'] }
+                    key: { in: [
+                        'RESTAURANT_NAME', 'PRIMARY_COLOR', 'SECONDARY_COLOR',
+                        'CURRENCY_SYMBOL', 'MENU_CATEGORIES', 'PAYMENT_METHODS', 'DEFAULT_RESERVATION_DURATION'
+                    ] }
                 }
             });
         } catch (e) {
-            settings = await prisma.$queryRaw`SELECT * FROM settings WHERE key IN ('RESTAURANT_NAME', 'PRIMARY_COLOR', 'SECONDARY_COLOR')`;
+            settings = await prisma.$queryRaw`SELECT * FROM settings WHERE key IN ('RESTAURANT_NAME', 'PRIMARY_COLOR', 'SECONDARY_COLOR', 'CURRENCY_SYMBOL', 'MENU_CATEGORIES', 'PAYMENT_METHODS', 'DEFAULT_RESERVATION_DURATION')`;
         }
 
         const settingsMap = {};
@@ -84,6 +87,10 @@ exports.getPublicSettings = async (req, res) => {
         if (!settingsMap['RESTAURANT_NAME']) settingsMap['RESTAURANT_NAME'] = 'NgonNgon';
         if (!settingsMap['PRIMARY_COLOR']) settingsMap['PRIMARY_COLOR'] = '#e5a546ff';
         if (!settingsMap['SECONDARY_COLOR']) settingsMap['SECONDARY_COLOR'] = '#ebb536ff';
+        if (!settingsMap['CURRENCY_SYMBOL']) settingsMap['CURRENCY_SYMBOL'] = '$';
+        if (!settingsMap['MENU_CATEGORIES']) settingsMap['MENU_CATEGORIES'] = 'STARTER,MAIN,DESSERT,BEVERAGE';
+        if (!settingsMap['PAYMENT_METHODS']) settingsMap['PAYMENT_METHODS'] = 'CASH,CARD,EWALLET';
+        if (!settingsMap['DEFAULT_RESERVATION_DURATION']) settingsMap['DEFAULT_RESERVATION_DURATION'] = '90';
 
         res.json({ success: true, settings: settingsMap });
     } catch (error) {

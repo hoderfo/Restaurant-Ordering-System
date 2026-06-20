@@ -24,6 +24,7 @@ const API_URL = import.meta.env.VITE_API_URL || `${window.location.origin}/api`;
 
 export const SocketContext = React.createContext();
 export const ApiContext = React.createContext();
+export const SettingsContext = React.createContext();
 
 const savedToken = localStorage.getItem('token');
 if (savedToken) {
@@ -34,7 +35,7 @@ const ProtectedRoute = ({ user, children }) => {
   if (!user) {
     return (
       <div style={{ textAlign: 'center', padding: '4rem 2rem' }}>
-        <h2>Welcome to Tasty Station</h2>
+        <h2>Welcome to the Staff Portal</h2>
         <p style={{ color: 'var(--text-muted)', marginTop: '1rem', fontSize: '1.1rem' }}>
           Please click "Staff Login" to access your workspace.
         </p>
@@ -48,15 +49,21 @@ function App() {
   const [socket, setSocket] = useState(null);
   const [user, setUser] = useState(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [restaurantName, setRestaurantName] = useState('Tasty Station');
+  const [globalSettings, setGlobalSettings] = useState({
+    RESTAURANT_NAME: 'Loading...',
+    CURRENCY_SYMBOL: '$',
+    MENU_CATEGORIES: 'STARTER,MAIN,DESSERT,BEVERAGE',
+    PAYMENT_METHODS: 'CASH,CARD,EWALLET',
+    DEFAULT_RESERVATION_DURATION: '90'
+  });
   const navigate = useNavigate();
 
   useEffect(() => {
     // Fetch Public Settings
     axios.get(`${API_URL}/settings/public`).then(res => {
       if (res.data.success) {
-        const { RESTAURANT_NAME, PRIMARY_COLOR, SECONDARY_COLOR } = res.data.settings;
-        if (RESTAURANT_NAME) setRestaurantName(RESTAURANT_NAME);
+        setGlobalSettings(res.data.settings);
+        const { PRIMARY_COLOR, SECONDARY_COLOR } = res.data.settings;
         if (PRIMARY_COLOR) document.documentElement.style.setProperty('--primary', PRIMARY_COLOR);
         if (SECONDARY_COLOR) document.documentElement.style.setProperty('--secondary', SECONDARY_COLOR);
       }
@@ -106,14 +113,15 @@ function App() {
   return (
     <SocketContext.Provider value={socket}>
       <ApiContext.Provider value={API_URL}>
-        <div className="app-container">
+        <SettingsContext.Provider value={globalSettings}>
+          <div className="app-container">
           <Toaster
             position="top-right"
             toastOptions={{ duration: 3000 }}
           />
           <header className="app-header">
             <div className="logo-container">
-              <h1>{restaurantName}</h1>
+              <h1>{globalSettings.RESTAURANT_NAME}</h1>
             </div>
             <nav className="main-nav">
               <Link to="/" className="nav-link"><LayoutGrid size={18} /> Floor Plan</Link>
@@ -180,6 +188,7 @@ function App() {
             />
           )}
         </div>
+        </SettingsContext.Provider>
       </ApiContext.Provider>
     </SocketContext.Provider>
   );

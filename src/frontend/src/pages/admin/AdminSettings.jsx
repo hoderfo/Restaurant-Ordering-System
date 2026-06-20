@@ -147,6 +147,85 @@ const AdminSettings = () => {
             </span>
           </div>
 
+          <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <label style={{ fontWeight: 'bold' }}>Currency Symbol</label>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <input 
+                type="text" 
+                className="form-input" 
+                style={{ flex: 1 }}
+                value={settings['CURRENCY_SYMBOL'] || '$'} 
+                onChange={(e) => handleChange('CURRENCY_SYMBOL', e.target.value)} 
+              />
+              <button 
+                className="btn-primary" 
+                onClick={() => handleSave('CURRENCY_SYMBOL')}
+                disabled={saving}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+
+          <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <label style={{ fontWeight: 'bold' }}>Menu Categories (Comma-separated)</label>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <input 
+                type="text" 
+                className="form-input" 
+                style={{ flex: 1 }}
+                value={settings['MENU_CATEGORIES'] || 'STARTER,MAIN,DESSERT,BEVERAGE'} 
+                onChange={(e) => handleChange('MENU_CATEGORIES', e.target.value)} 
+              />
+              <button 
+                className="btn-primary" 
+                onClick={() => handleSave('MENU_CATEGORIES')}
+                disabled={saving}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+
+          <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <label style={{ fontWeight: 'bold' }}>Payment Methods (Comma-separated)</label>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <input 
+                type="text" 
+                className="form-input" 
+                style={{ flex: 1 }}
+                value={settings['PAYMENT_METHODS'] || 'CASH,CARD,EWALLET'} 
+                onChange={(e) => handleChange('PAYMENT_METHODS', e.target.value)} 
+              />
+              <button 
+                className="btn-primary" 
+                onClick={() => handleSave('PAYMENT_METHODS')}
+                disabled={saving}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+
+          <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <label style={{ fontWeight: 'bold' }}>Default Reservation Duration (Minutes)</label>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <input 
+                type="number" 
+                className="form-input" 
+                style={{ flex: 1 }}
+                value={settings['DEFAULT_RESERVATION_DURATION'] || '90'} 
+                onChange={(e) => handleChange('DEFAULT_RESERVATION_DURATION', e.target.value)} 
+              />
+              <button 
+                className="btn-primary" 
+                onClick={() => handleSave('DEFAULT_RESERVATION_DURATION')}
+                disabled={saving}
+              >
+                Save
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

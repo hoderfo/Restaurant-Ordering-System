@@ -122,7 +122,7 @@ model MenuItem {
   name        String
   description String?
   price       Decimal        @db.Decimal(10, 2)
-  category    MenuCategory
+  category    String
   status      MenuItemStatus @default(ACTIVE)
   imageUrl    String?
   createdAt   DateTime       @default(now())
@@ -130,13 +130,6 @@ model MenuItem {
   orderItems OrderItem[]
 
   @@map("menu_items")
-}
-
-enum MenuCategory {
-  STARTER
-  MAIN
-  DESSERT
-  BEVERAGE
 }
 
 enum MenuItemStatus {
@@ -188,7 +181,7 @@ model Bill {
   discountAmount Decimal?       @db.Decimal(10, 2)
   discountReason String?
   total          Decimal        @db.Decimal(10, 2)
-  paymentMethod  PaymentMethod?
+  paymentMethod  String?
   closedAt       DateTime?
   closedById     Int?
   closedBy       User?          @relation("ClosedBy", fields: [closedById], references: [id])
@@ -202,11 +195,7 @@ enum DiscountType {
   FLAT
 }
 
-enum PaymentMethod {
-  CASH
-  CARD
-  EWALLET
-}
+
 
 // Void log
 model VoidLog {

@@ -180,13 +180,16 @@ exports.checkoutOrder = async (req, res) => {
     const { orderId } = req.params;
     const { paymentMethod, discountType, discountValue, discountReason } = req.body;
     
-    const validPaymentMethods = ['CASH', 'CARD', 'EWALLET'];
+    const paymentMethodSetting = await prisma.setting.findUnique({ where: { key: 'PAYMENT_METHODS' }});
+    const allowedPaymentMethodsStr = paymentMethodSetting ? paymentMethodSetting.value : 'CASH,CARD,EWALLET';
+    const validPaymentMethods = allowedPaymentMethodsStr.split(',').map(c => c.trim().toUpperCase());
+
     const validDiscountTypes = ['PERCENTAGE', 'FLAT'];
     const uppercasePaymentMethod = paymentMethod ? paymentMethod.toUpperCase() : null;
     const uppercaseDiscountType = discountType ? discountType.toUpperCase() : null;
 
     if (!uppercasePaymentMethod || !validPaymentMethods.includes(uppercasePaymentMethod)) {
-        return res.status(400).json({ success: false, message: 'Invalid or missing paymentMethod. Use cash, card, or ewallet.' });
+        return res.status(400).json({ success: false, message: `Invalid paymentMethod. Allowed: ${validPaymentMethods.join(', ')}` });
     }
 
     if (uppercaseDiscountType && !validDiscountTypes.includes(uppercaseDiscountType)) {

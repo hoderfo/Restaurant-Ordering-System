@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
-import { SocketContext, ApiContext } from '../../App';
+import { SocketContext, ApiContext, SettingsContext } from '../../App';
 import { toast } from 'react-hot-toast';
 
 const AdminAnalytics = ({ user }) => {
   const socket = useContext(SocketContext);
   const API_URL = useContext(ApiContext);
+  const globalSettings = useContext(SettingsContext) || {};
+  const currency = globalSettings.CURRENCY_SYMBOL || '$';
 
   const [metrics, setMetrics] = useState(null);
   const [logs, setLogs] = useState([]);
@@ -80,7 +82,7 @@ const AdminAnalytics = ({ user }) => {
           </div>
           <div className="glass-panel" style={{ padding: '15px' }}>
             <h4>Revenue</h4>
-            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#10B981' }}>${(metrics.metrics.total_revenue || 0).toFixed(2)}</div>
+            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#10B981' }}>{currency}{(metrics.metrics.total_revenue || 0).toFixed(2)}</div>
           </div>
           <div className="glass-panel" style={{ padding: '15px' }}>
             <h4>Active Orders</h4>
@@ -88,7 +90,7 @@ const AdminAnalytics = ({ user }) => {
           </div>
           <div className="glass-panel" style={{ padding: '15px' }}>
             <h4>Avg Order Value</h4>
-            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>${(metrics.metrics.avg_order_value || 0).toFixed(2)}</div>
+            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{currency}{(metrics.metrics.avg_order_value || 0).toFixed(2)}</div>
           </div>
         </div>
       )}
