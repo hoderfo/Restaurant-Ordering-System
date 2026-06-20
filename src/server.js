@@ -171,11 +171,19 @@ const scheduleDailyBackup = () => {
   }, ms);
 };
 
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
   console.log(`
 	HTTP Server: http://0.0.0.0:${PORT} (Access via your local IP)
 	Environment: ${process.env.NODE_ENV}
   `);
+
+  try {
+    const prisma = require('./config/db');
+    await prisma.user.updateMany({ data: { isActive: false } });
+    console.log('Reset all user statuses to offline.');
+  } catch (err) {
+    console.error('Failed to reset user statuses:', err);
+  }
 
   scheduleDailyBackup();
   monitoringService.runHealthChecks();

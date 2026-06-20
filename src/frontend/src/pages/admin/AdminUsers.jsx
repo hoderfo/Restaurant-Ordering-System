@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
-import { ApiContext } from '../../App';
+import { ApiContext, SocketContext } from '../../App';
 import { toast } from 'react-hot-toast';
 
 const AdminUsers = () => {
   const API_URL = useContext(ApiContext);
+  const socket = useContext(SocketContext);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -24,6 +25,22 @@ const AdminUsers = () => {
   useEffect(() => {
     fetchUsers();
   }, []);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleStatusUpdate = ({ userId, isActive }) => {
+      setUsers(prevUsers => prevUsers.map(user => 
+        user.id === userId ? { ...user, isActive } : user
+      ));
+    };
+
+    socket.on('user:status_update', handleStatusUpdate);
+    
+    return () => {
+      socket.off('user:status_update', handleStatusUpdate);
+    };
+  }, [socket]);
 
   const handleCreateUser = async (e) => {
     e.preventDefault();

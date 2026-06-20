@@ -1,6 +1,7 @@
 const analyticsService = require('../services/analytics.service');
 const auditService = require('../services/audit.service');
 const reportsService = require('../services/reports.service');
+const prisma = require('../config/db');
 
 // Handle WebSocket connections (I LOVE MIGRATIONS >:c)
 function setupWebSocketHandlers(io) {
@@ -27,8 +28,19 @@ function setupWebSocketHandlers(io) {
   });
 
   // Connection handler
-  io.on('connection', (socket) => {
+  io.on('connection', async (socket) => {
     console.log(`User ${socket.user.username} connected: ${socket.id}`);
+
+    // Update status to active
+    try {
+      await prisma.user.update({
+        where: { id: socket.user.user_id },
+        data: { isActive: true }
+      });
+      broadcastUserStatus(io, socket.user.user_id, true);
+    } catch (error) {
+      console.error('Failed to set active status:', error);
+    }
 
     socket.on('dashboard:subscribe', async (data) => {
       const { date = new Date().toISOString().split('T')[0] } = data;
@@ -103,8 +115,19 @@ function setupWebSocketHandlers(io) {
       }
     });
 
-    socket.on('disconnect', () => {
+    socket.on('disconnect', async () => {
       console.log(`User ${socket.user.username} disconnected`);
+      
+      // Update status to inactive
+      try {
+        await prisma.user.update({
+          where: { id: socket.user.user_id },
+          data: { isActive: false }
+        });
+        broadcastUserStatus(io, socket.user.user_id, false);
+      } catch (error) {
+        console.error('Failed to set inactive status:', error);
+      }
     });
   });
 
@@ -132,8 +155,16 @@ function broadcastAuditLog(io, logEntry) {
   io.to('auditlog').emit('auditlog:new', logEntry);
 }
 
+/**
+ * Broadcast user status change
+ */
+function broadcastUserStatus(io, userId, isActive) {
+  io.emit('user:status_update', { userId, isActive });
+}
+
 module.exports = {
   setupWebSocketHandlers,
   broadcastDashboardUpdate,
-  broadcastAuditLog
+  broadcastAuditLog,
+  broadcastUserStatus
 };

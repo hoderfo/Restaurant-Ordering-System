@@ -10,6 +10,7 @@ class AdminService {
         id: true,
         username: true,
         role: true,
+        isActive: true,
         createdAt: true
       },
       orderBy: { createdAt: 'asc' }
@@ -61,12 +62,14 @@ class AdminService {
         data: {
           username,
           password: hashedPassword,
-          role
+          role,
+          isActive: false
         },
         select: {
           id: true,
           username: true,
           role: true,
+          isActive: true,
           createdAt: true
         }
       });

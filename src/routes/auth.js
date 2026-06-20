@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const prisma = require('../config/db');
 const auditService = require('../services/audit.service');
 const { authenticateToken } = require('../middleware/auth');
+const { broadcastUserStatus } = require('../websocket/handlers');
 
 const router = express.Router();
 
@@ -64,6 +65,16 @@ router.post('/login', async (req, res) => {
       process.env.JWT_EXPIRES_IN ? { expiresIn: process.env.JWT_EXPIRES_IN } : {}
     );
 
+    // Update user status to active (online)
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { isActive: true }
+    });
+
+    if (req.app.locals.io) {
+      broadcastUserStatus(req.app.locals.io, user.id, true);
+    }
+
     // Log successful login
     await auditService.logAction(user.id, 'LOGIN_SUCCESS', 'auth', true, req.ip, { username });
 
@@ -97,6 +108,16 @@ router.post('/logout', authenticateToken, async (req, res) => {
       req.ip,
       { username: req.user.username }
     );
+
+    // Update user status to inactive (offline)
+    await prisma.user.update({
+      where: { id: req.user.user_id },
+      data: { isActive: false }
+    });
+
+    if (req.app.locals.io) {
+      broadcastUserStatus(req.app.locals.io, req.user.user_id, false);
+    }
 
     res.json({
       message: 'Logged out successfully.'

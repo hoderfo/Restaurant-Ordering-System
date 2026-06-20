@@ -73,7 +73,14 @@ function App() {
     return () => newSocket.close();
   }, []);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      if (localStorage.getItem('token')) {
+        await axios.post(`${API_URL}/auth/logout`);
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setUser(null);
