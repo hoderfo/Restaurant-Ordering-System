@@ -9,7 +9,21 @@ const createTable = async (req, res) => {
 
         const existingTable = await prisma.table.findUnique({ where: { label } });
         if (existingTable) {
-            return res.status(400).json({ success: false, message: "Table already exists" });
+            if (existingTable.isActive) {
+                return res.status(400).json({ success: false, message: "Table already exists" });
+            } else {
+                const reactivatedTable = await prisma.table.update({
+                    where: { id: existingTable.id },
+                    data: { isActive: true, capacity: parseInt(capacity), status: tableStatus }
+                });
+                reactivatedTable.status = capitalize(reactivatedTable.status);
+                
+                if (req.app.locals.io) {
+                    req.app.locals.io.emit('table:created', { ...reactivatedTable, _id: reactivatedTable.id });
+                }
+        
+                return res.status(201).json({ success: true, message: "Table created", table: { ...reactivatedTable, _id: reactivatedTable.id } });
+            }
         }
         const createdTable = await prisma.table.create({
             data: { label, capacity: parseInt(capacity), status: tableStatus }

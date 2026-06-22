@@ -115,6 +115,12 @@ const FloorPlan = ({ user }) => {
     }
   };
 
+  const handleOrderItemUpdated = (data) => {
+    if (data.status === 'READY') {
+      toast.success(`🍽️ ${data.menu_item_name} is READY for Table ${data.table_label}!`, { duration: 5000 });
+    }
+  };
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchTables();
@@ -144,12 +150,6 @@ const FloorPlan = ({ user }) => {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket]);
-
-  const handleOrderItemUpdated = (data) => {
-    if (data.status === 'READY') {
-      toast.success(`🍽️ ${data.menu_item_name} is READY for Table ${data.table_label}!`, { duration: 5000 });
-    }
-  };
 
   const getNextTableNumber = () => {
     if (!tables || tables.length === 0) return 1;
@@ -313,6 +313,7 @@ const FloorPlan = ({ user }) => {
 
       {selectedTable && (
         <TableDetailsModal
+          user={user}
           table={selectedTable}
           reservations={reservations.filter(r =>
             (r.tableId === selectedTable.id || r.tableId === selectedTable._id) &&

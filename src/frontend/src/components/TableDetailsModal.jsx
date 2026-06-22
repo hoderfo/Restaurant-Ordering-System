@@ -5,7 +5,7 @@ import { X, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import OrderManagementModal from './OrderManagementModal';
 
-const TableDetailsModal = ({ table, reservations = [], onClose, displayStatus, onActionSuccess }) => {
+const TableDetailsModal = ({ user, table, reservations = [], onClose, displayStatus, onActionSuccess }) => {
   const API_URL = useContext(ApiContext);
   const [loading, setLoading] = useState(false);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
@@ -73,9 +73,16 @@ const TableDetailsModal = ({ table, reservations = [], onClose, displayStatus, o
               {displayStatus || table.status}
             </span>
           </div>
-          <button type="button" onClick={onClose} className="btn-secondary" style={{ padding: '0.25rem' }}>
-            <X size={20} />
-          </button>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            {user?.role === 'admin' && (
+              <button type="button" onClick={handleDelete} className="btn-secondary" style={{ padding: '0.25rem', color: '#EF4444', borderColor: 'transparent' }} title="Delete Table">
+                <Trash2 size={20} />
+              </button>
+            )}
+            <button type="button" onClick={onClose} className="btn-secondary" style={{ padding: '0.25rem' }}>
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
 
