@@ -34,7 +34,7 @@ const findBestFitTable = async (guests, requestedStartTime, requestedEndTime, re
     const allDayReservations = await prisma.reservation.findMany({
         where: {
             tableId: { in: tables.map(t => t.id) },
-            status: { notIn: ['CANCELLED', 'NO_SHOW'] },
+            status: { notIn: ['CANCELLED', 'COMPLETED', 'NO_SHOW'] },
             date: {
                 gte: reqDate,
                 lt: new Date(reqDate.getTime() + 24 * 60 * 60 * 1000)
@@ -192,27 +192,64 @@ const createReservation = async (req, res) => {
 
         const createdByUserId = req.user?.user_id ? parseInt(req.user.user_id) : 1; // Fallback to 1 if not set in some environments
 
-        const reservation = await prisma.reservation.create({
-            data: {
-                tableId: assignedTable.id,
-                customerName: bookedBy,
-                phone: contact,
-                partySize: guests,
-                date: reqDate,
-                startTime: startTime,
-                duration: duration,
-                notes: notes || null,
-                status: initialStatus,
-                createdById: createdByUserId
+        let reservation;
+        try {
+            reservation = await prisma.$transaction(async (tx) => {
+                // Obtain a transaction-level advisory lock on the table ID to strictly prevent concurrent bookings
+                await tx.$executeRaw`SELECT pg_advisory_xact_lock(${assignedTable.id})`;
+
+                // Final double-check inside transaction to prevent race conditions
+                const doubleCheckOverlaps = await tx.reservation.findMany({
+                    where: {
+                        tableId: assignedTable.id,
+                        date: {
+                            gte: new Date(`${getLocalDateString(bufferedStartTime)}T00:00:00.000Z`),
+                            lt: new Date(new Date(`${getLocalDateString(bufferedStartTime)}T00:00:00.000Z`).getTime() + 24 * 60 * 60 * 1000)
+                        },
+                        status: { notIn: ['CANCELLED', 'COMPLETED', 'NO_SHOW'] }
+                    }
+                });
+
+                for (let resRec of doubleCheckOverlaps) {
+                    const start = new Date(resRec.startTime);
+                    const end = new Date(start.getTime() + resRec.duration * 60000);
+                    if (start < bufferedEndTime && end > bufferedStartTime) {
+                        throw new Error("RACE_CONDITION");
+                    }
+                }
+
+                const newRes = await tx.reservation.create({
+                    data: {
+                        tableId: assignedTable.id,
+                        customerName: bookedBy,
+                        phone: contact,
+                        partySize: guests,
+                        date: reqDate,
+                        startTime: startTime,
+                        duration: duration,
+                        notes: notes || null,
+                        status: initialStatus,
+                        createdById: createdByUserId
+                    }
+                });
+
+                if (isWalkIn) {
+                    await tx.table.update({
+                        where: { id: assignedTable.id },
+                        data: { status: 'OCCUPIED' }
+                    });
+                }
+
+                return newRes;
+            });
+        } catch (txError) {
+            if (txError.message === "RACE_CONDITION") {
+                return res.status(409).json({ success: false, message: "The table was just booked by another staff member a second ago! Please try booking again to find a new table." });
             }
-        });
+            throw txError;
+        }
 
         if (isWalkIn) {
-            await prisma.table.update({
-                where: { id: assignedTable.id },
-                data: { status: 'OCCUPIED' }
-            });
-
             if (req.app.locals.io) {
                 req.app.locals.io.emit('table:updated', { id: assignedTable.id, status: 'Occupied' });
             }
